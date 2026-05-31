@@ -1,94 +1,130 @@
-# db2doc — 스키마 메타데이터 기반 자동 "의미 문서(description)" 복원
+# db2doc — 문서 없는 DB를 자동으로 "설명"해 주는 도구
 
-문서(스키마 정의서·주석·ERD)가 **전혀 없는** 데이터베이스에서, **스키마(테이블/컬럼명·타입)와
-샘플 튜플만으로** 각 DB / 테이블 / 컬럼이 무엇인지 **자연어 설명(description)을 자동 복원**하고,
-그 정확도를 **정답지와 대조해 정량 채점**하는 PoC.
+> **한 줄 요약**: 스키마 정의서·주석·ERD가 **하나도 없는** 데이터베이스를 받아서,
+> **테이블/컬럼 이름과 실제 데이터만 보고** "이 테이블/컬럼이 무엇인지"를 사람이 읽을 수 있는
+> 문장으로 **자동 복원**하고, 사람이 검수·수정해 **살아있는 데이터 카탈로그(메타스토어)**로 만든다.
 
-> 최종 목표(후속 단계)는 복원한 메타구조를 온톨로지(Property Graph) + Amazon Neptune으로 올려
-> text2sql / 스키마 검수 / SQL 튜닝을 돕는 DBA agent를 만드는 것. 이 저장소는 그 **1단계 = 의미 문서
-> 복원이 실제로 가능한가를 정답지로 증명**하는 데 집중한다.
+DBA가 처음 보는 DB를 받았을 때 하는 일 — *데이터 좀 떠보고, 키·조인 관계 파악하고, "아 이 테이블은
+환자 진단 기록이구나" 결론 내리는 것* — 을 자동화한다. 100% 자동이 아니라 **AI가 초안을 만들고
+DBA가 검수**하는 구조다.
 
-## 왜 OMOP CDM인가
+---
 
-OMOP CDM은 공식 **데이터 딕셔너리(`Field_Level.csv`)** 가 컬럼 설명(`userGuidance`)과
-PK/FK 관계를 모두 기계 판독 가능한 형태로 제공한다 → **우리가 생성한 설명을 채점할 정답지**로 이상적.
-합성 데이터(Eunomia/GiBleed)라 개인정보 이슈도 없다. 버전은 **5.3**으로 통일
-(GiBleed 데모 데이터가 5.3 → DDL·정답지도 5.3으로 맞춰 ETL 불필요).
+## 어떻게 돌아가나 (전체 흐름)
 
-## 파이프라인
-
+```mermaid
+flowchart TD
+    A["내 DB 연결<br/>(PostgreSQL / MySQL …)"] --> B["1. 프로파일링<br/>테이블·컬럼·타입 + 데이터 통계·샘플값"]
+    B --> C["2. 관계 복원<br/>PK / FK 자동 발견 (데이터+이름)"]
+    C --> D["3. 의미 추론 ★<br/>Claude Opus 4.8가 컬럼→테이블→DB 설명 생성"]
+    D --> E["4. 자가 검증<br/>모순 탐지 · 신뢰도 보정"]
+    E --> F["5. 사람 검수<br/>신뢰도 낮은 것만 DBA가 확인·수정"]
+    F --> G["산출물<br/>데이터 딕셔너리 · COMMENT SQL · ERD"]
+    F -. 교정 내용 축적 .-> D
 ```
-RDS 적재(OMOP+GiBleed) → 문서제거(strip_docs) → 프로파일링(profile)
-   → (보조)관계복원(recover) → ★description 생성(document, Opus 4.8)
-   → 렌더(render) → 채점(eval: 정답지 대조)
-```
 
-| 단계 | 디렉터리 | 산출 |
+핵심 원칙: **데이터로 확인되는 것만 자신 있게 말하고, 확인 못 한 건 솔직히 "낮은 신뢰도"로 표시**해
+사람이 검수하게 한다. 그래서 틀린 설명을 그럴듯하게 우기는 일(hallucination)을 막는다.
+
+---
+
+## 무엇을 복원하나 — 실제 예시
+
+문서가 0인 상태에서, `person.gender_concept_id` 컬럼 하나를 보자.
+
+**입력 (시스템이 데이터에서 모은 단서):**
+| 단서 | 값 | 의미 |
 |---|---|---|
-| 0. 환경 | `infra/` | RDS 생성·적재 (→ `SETUP.md`) |
-| 1. 문서 제거 | `prepare/` | FK·comment 제거된 "문서 없는 DB" |
-| 2. 프로파일 | `profile/` | `out/profile.json` |
-| 3. 관계 복원(보조) | `recover/` | `out/relations.json` |
-| 4. ★description 생성 | `document/` | `out/descriptions.json` |
-| 5. 렌더 | `render/` | Markdown / SQL COMMENT / CSV / Mermaid |
-| 6. 채점 | `eval/` | description 의미 일치도 + PK/FK F1 |
+| 컬럼명 | `gender_concept_id` | "성별 + 개념 ID" |
+| 고유값 비율 | 0.002 | 거의 안 변함 → **코드값(enum)** 신호 |
+| 가장 흔한 값 | `8532`(511건), `8507`(489건) | 딱 2종, 반반 → 이진 범주 |
+| 복원된 관계 | → `concept.concept_id` | 표준 개념 테이블을 가리키는 FK |
 
-## DB / 테이블 / 컬럼의 의미를 추론하는 방식
+**출력 (AI가 생성한 설명):**
+> *"성별을 나타내는 표준 개념 ID이며 concept 테이블을 참조하는 외래키. 데이터상 값은 두 종류로,
+> 성별 코드로 보인다."* (신뢰도 0.9+)
 
-문서가 없으므로 **물리 스키마 + 실제 데이터에서 단서를 모아 LLM에 넘기고, LLM이 의미를 추론**한다.
-규칙·통계가 객관적 단서를 만들고, LLM이 그 단서로 자연어 설명을 쓴다. 단계는 작은 단위→큰 단위
-(컬럼 → 테이블 → DB)로 올라간다.
+→ 이름·통계·관계 세 단서를 합쳐 **"성별 코드이고 concept를 가리킨다"**까지 데이터 근거로 추론한다.
+(단, "8507이 정확히 무엇인지"처럼 데이터에 매핑이 없는 부분은 단정하지 않고 검수로 넘긴다.)
 
-### 1) 컬럼에서 모으는 단서 (프로파일러 + 관계복원이 생성)
-LLM에게 주는 컬럼당 입력은 다음으로 구성된다 (코드: `db2doc/pipeline/describe.py:compact_columns`,
-통계 출처: `db2doc/targets/stats.py`):
-- **이름·타입·nullable** — `gender_concept_id` / `integer` / `not null`
-- **카디널리티** — `distinct_ratio`(고유값 비율). 1.0이면 식별자 후보, 0.002처럼 낮으면 코드값(enum) 신호
-- **null 비율** — `null_ratio`
-- **값 범위** — `min` / `max`
-- **실제 분포 샘플** — `top_values`(가장 흔한 값 top-k와 빈도), `examples`
-- **복원된 관계** — 이 컬럼이 어느 테이블을 가리키는 FK인지 (`recovered_relations`)
+---
 
-관계(FK)는 선언이 없어도 **값 포함관계(inclusion dependency)** 로 복원한다: 자식 컬럼의 샘플 값이
-부모 후보 컬럼(주로 PK)에 모두 포함되면 FK로 본다(`db2doc/pipeline/relations.py`). 이름 유사도·
-카디널리티와 가중합해 점수화하고 게이트로 거른다. PK는 카디널리티·이름패턴·타입·위치로 점수화한다.
+## 단계별 상세
 
-### 2) LLM에 넘기는 방식 (테이블 1개 = 호출 1회)
-`db2doc/pipeline/describe.py`가 두 메시지를 AWS Bedrock으로 보낸다:
-- **system**: "문서 없는 DB를, 물리 스키마·통계·샘플값만 보고 의미를 추론하라. **데이터가 뒷받침하지
-  않는 사실은 지어내지 말 것.**"
-- **user**: 테이블 1개를 JSON으로 — `table_name`, `row_count`, `recovered_relations`(PK/FK),
-  그리고 위 컬럼 단서 배열. (예: `{"name":"gender_concept_id","type":"integer",
-  "distinct_ratio":0.002,"top_values":[...],"examples":["8532","8507"]}`)
+| 단계 | 하는 일 | 결과물 |
+|---|---|---|
+| **1. 프로파일링** | `information_schema`에서 테이블/컬럼/타입 + 컬럼별 통계(고유값·null·min/max·top-k 분포) + 테이블당 ≤1000행 샘플 | 구조화된 프로파일 |
+| **2. 관계 복원** | PK·FK를 **데이터로** 발견: 자식 컬럼 값이 부모 키에 다 들어있으면 FK(값 포함관계). 데이터 없는 빈 테이블은 **이름 규칙**으로 보강. 선언된 키가 있으면 그대로 채택 | PK/FK + 신뢰도·근거 |
+| **3. 의미 추론 ★** | Claude Opus 4.8에 단서를 주고 **컬럼→테이블→DB** 순으로 설명 생성. enum 해석·hallucination 방지·보수적 신뢰도를 지시 | db/table/column 설명 + 신뢰도 |
+| **4. 자가 검증** | 설명들 간 모순 탐지(예: FK 방향 오추론), 데이터로 검증 못 한 항목은 신뢰도 강등 | 검증·보정된 설명 |
+| **5. 사람 검수** | 신뢰도 **낮은 것만** 추려 DBA가 확인/수정/승인. 모든 변경은 이력(감사) 기록 | 확정된 설명 |
+| **산출물** | 데이터 딕셔너리(Markdown) · `COMMENT ON` SQL(DB에 주석 반영) · CSV · Mermaid ERD | 문서 |
 
-출력은 **JSON 스키마를 강제**(tool use)해 항상 `{table_description, columns:[{name, description,
-confidence}]}` 형태로 받는다. 각 설명에는 **LLM이 매긴 confidence(0~1)** 가 붙는다.
+> 이 5단계는 **여러 DBMS**(PostgreSQL·MySQL 등)에서 동일하게 동작한다(SQLAlchemy 추상화).
 
-### 3) 테이블 → DB로 합성
-- 테이블은 **FK 의존 순서**(부모 먼저)로 처리하고, 이미 만든 이웃 테이블 설명을 다음 테이블
-  프롬프트에 컨텍스트로 넣는다 (`fk_order`, `neighbour_table_descriptions`).
-- 모든 테이블 설명이 모이면 그것들을 묶어 **DB 전체 설명**을 한 번 더 생성한다(`synthesize_db`).
+---
 
-### 추론의 한계 = confidence와 검수
-이 방식이 확실히 알 수 있는 것은 **데이터에 드러나는 구조적 사실**이다: 카디널리티로 "식별자냐
-코드값이냐", inclusion으로 "무엇을 가리키는 FK냐", 분포로 "이진/소수 범주냐". 반면 **코드값의 구체적
-의미(예: 어떤 코드가 무엇을 뜻하는지)** 는 데이터에 그 매핑이 함께 들어있지 않으면 확정할 수 없다.
-그런 항목은 confidence가 낮게 나오고, 제품에서는 **Review Queue로 올라가 사람(DBA)이 확정**한다
-(메타스토어 제품: `db2doc/`). 즉 자동 추론은 **초안**이고, 최종 의미는 근거(통계·관계)를 보고
-사람이 검수해 확정하는 구조다.
+## 검증 — "정말 맞나?"를 숫자로 증명
+
+채점이 가능한 공개 표준 **OMOP CDM**(공식 데이터 딕셔너리가 정답지 역할)으로 측정했다.
+문서·FK·주석을 모두 지운 뒤 우리 도구로 복원하고, **공식 정답지와 대조**했다.
+
+| 지표 | 개선 전 | 개선 후 |
+|---|---|---|
+| 컬럼 설명 의미 일치 (LLM 심사) | 0.93 | **0.92~0.94** |
+| 테이블 설명 의미 일치 | 1.00 | **1.00** |
+| PK(기본키) 복원 F1 | 0.67 | **0.91** (재현율 1.0) |
+| FK(외래키) 복원 F1 | 0.39 | **0.62** |
+| 종합 점수(S_overall) | 0.69 | **0.84** |
+
+→ **문서가 0인 DB에서 테이블 의미 100% / 컬럼 의미 ~94% 일치**로 복원. (대상: OMOP CDM 5.3,
+합성데이터 GiBleed, 37테이블) 상세·정직한 ablation은 [`RESULTS.md`](RESULTS.md), 개선 로드맵은
+[`IMPROVEMENTS.md`](IMPROVEMENTS.md) 참고.
+
+---
+
+## 근거 연구 / 차용 (출처 명시)
+
+이 도구의 핵심 기법은 아래를 **참고·차용**했다.
+
+- **논문**: *DBAutoDoc: Automated Discovery and Documentation of Undocumented Database
+  Schemas via Statistical Analysis and Iterative LLM Refinement* (Nagarajan & Altman, 2026,
+  arXiv:2603.23050) — 통계 분석 + LLM 반복정제로 미문서 스키마의 PK/FK·설명을 복원한다는 접근.
+- **오픈소스 구현**: [`github.com/MemberJunction/MJ`](https://github.com/MemberJunction/MJ)
+  의 `packages/DBAutoDoc/` (**MIT 라이선스**). 실제 프롬프트 템플릿(18개)·설계 문서·가드레일이 공개.
+
+우리가 실제로 차용한 메커니즘(전부 출처 표기):
+- **PK/FK 점수화 + 값 포함관계(inclusion dependency) + 게이트** — 관계 복원
+- **프롬프트 지시**(`table-analysis.md`): enum/저카디널리티 해석, 테이블명 지어내기 금지,
+  "모호하면 신뢰도 0.7 미만" 보수적 채점
+- **LLM 검증 패스**(`fk-pruning-holistic.md`, `dependency-level-sanity-check.md`): FK 후보 정제,
+  설명 간 모순 탐지
+- **반복 정제**(`backpropagation.md`): 자식 테이블 맥락으로 부모 설명 재검토 (옵션)
+
+> 검증 메모: 우리 코드의 가치는 인용과 무관하게 **자체 정답지(OMOP) 채점으로 입증**했고,
+> 각 차용 기법은 우리 데이터로 재측정해 효과 있는 것만 채택했다(예: backpropagation은 이 데이터에선
+> 효과가 없어 기본 비활성). 자세한 내용은 [`IMPROVEMENTS.md`](IMPROVEMENTS.md).
+
+---
+
+## 두 가지 사용 형태
+
+1. **파이프라인(PoC)** — `profile/ recover/ document/ render/ eval/` 스크립트로 한 DB를 한 번에 처리.
+   채점·실험용. 빠른 시작:
+   ```bash
+   cp .env.example .env        # DB 접속·AWS 설정 채우기
+   pip install -r requirements.txt
+   # 이후 SETUP.md 절차: RDS 생성 → 적재 → 파이프라인 실행
+   ```
+2. **메타스토어 제품** — `db2doc/` 패키지. 여러 DB를 등록·스캔·추론·검수하고 **MySQL에 영구 저장**,
+   웹 UI 제공. 실행법은 [`db2doc/README.md`](db2doc/README.md).
 
 ## 환경
-
-- DB: **AWS RDS PostgreSQL 16** (로컬 docker 없음). 셋업 절차는 [`SETUP.md`](SETUP.md).
+- 대상 DB: **PostgreSQL / MySQL 등** (SQLAlchemy 추상화). PoC 검증은 AWS RDS PostgreSQL 16.
 - LLM: **AWS Bedrock — Claude Opus 4.8** (`us.anthropic.claude-opus-4-8`). 자격증명은 AWS로 통일.
+- 메타스토어: MySQL. 셋업은 [`SETUP.md`](SETUP.md).
 
-## 빠른 시작
-
-```bash
-cp .env.example .env        # 값 채우기
-pip install -r requirements.txt
-# 이후 SETUP.md 절차에 따라 RDS 생성 → 적재 → 파이프라인 실행
-```
-
-근거 연구: DBAutoDoc (arXiv 2603.23050, Nagarajan & Altman, 2026) — 통계 + LLM 반복정제로
-미문서 스키마의 PK/FK·설명을 복원. 본 PoC는 그 방식을 차용해 **description 복원**에 초점을 둔다.
+## 최종 목표 (로드맵)
+이 저장소는 **1단계: 의미 문서 복원이 가능한가를 증명**하는 데 집중한다. 이후:
+복원한 메타구조 → **온톨로지(Property Graph) + Amazon Neptune** → **text2sql / 스키마 검수 /
+SQL 튜닝**을 돕는 DBA 에이전트로 확장한다. (text2sql은 차용한 논문/저장소에도 query 템플릿으로 존재.)
