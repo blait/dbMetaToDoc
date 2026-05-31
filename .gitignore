@@ -19,3 +19,6 @@ out/*.mmd
 
 # OS
 .DS_Store
+
+# built UI (regenerable; demo copy lives in results/)
+ui/db2doc_ui.html
