@@ -2,12 +2,12 @@
   "description_match": {
     "column": {
       "n": 275,
-      "mean_cosine": 0.4821,
-      "judge_accuracy": 0.9382
+      "mean_cosine": 0.4771,
+      "judge_accuracy": 0.92
     },
     "table": {
       "n": 37,
-      "mean_cosine": 0.6314,
+      "mean_cosine": 0.6545,
       "judge_accuracy": 1.0
     }
   },
@@ -21,11 +21,11 @@
       "fn": 0
     },
     "foreign_key_f1": {
-      "precision": 0.902,
+      "precision": 0.914,
       "recall": 0.471,
-      "f1": 0.619,
+      "f1": 0.622,
       "tp": 74,
-      "fp": 8,
+      "fp": 7,
       "fn": 83
     }
   },
@@ -33,9 +33,9 @@
     "column": 0.996,
     "table": 1.0
   },
-  "Soverall": 0.8397,
+  "Soverall": 0.8407,
   "usage_doc": {
-    "input_tokens": 97339,
-    "output_tokens": 37644
+    "input_tokens": 110602,
+    "output_tokens": 40601
   }
 }

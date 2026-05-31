@@ -1077,18 +1077,6 @@
       "source": "name"
     },
     {
-      "child_table": "relationship",
-      "child_column": "relationship_concept_id",
-      "parent_table": "fact_relationship",
-      "parent_column": "relationship_concept_id",
-      "inclusion": null,
-      "name_sim": 1.0,
-      "score": 20.0,
-      "tested": 0,
-      "confidence": 0.4,
-      "source": "name"
-    },
-    {
       "child_table": "specimen",
       "child_column": "person_id",
       "parent_table": "person",

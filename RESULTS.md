@@ -20,6 +20,19 @@ confidence) + 증거기반 confidence 보정을 적용한 ablation 결과:
 핵심: 빈 테이블 보강으로 **PK recall 1.0 달성**, FK recall 약 2배. confidence 보정으로 "검증 못 한
 설명을 과신"하던 문제 해소 → Review Queue triage가 실제로 작동. 출처: MemberJunction/MJ (MIT).
 
+### 추가 LLM 검증 단계의 실측 기여 (정직한 ablation)
+프롬프트 12종 중 pruning/sanity/backpropagation 3종을 더 구현해 측정한 결과:
+- **FK LLM pruning** (fk-pruning-holistic): 41개 저-confidence 후보 중 **1개만 제거** →
+  우리가 이름기반으로 늘린 FK가 거의 다 진짜였음을 검증. precision 0.76→0.91 회복.
+- **sanity-check** (dependency-level-sanity): 모순 설명을 실제로 탐지(예: `relationship`의 FK
+  방향 오추론) → 해당 테이블 confidence 강등. 신뢰성에 기여.
+- **backpropagation** (반복 정제): 이 데이터에선 **revised 0 (수렴)** — 강화된 프롬프트로 1패스가
+  이미 충분해 고칠 것이 없었음. **비용만 들고 효과 없음**(OMOP은 도메인이 명확한 탓; 더 모호한
+  고객 DB에선 다를 수 있음). → 기본 비활성(backprop_passes=0), 옵션으로 보존.
+- col judge는 0.931→0.92로 노이즈 수준 미세 변동(보수적 프롬프트·confidence 강등 영향).
+교훈: "논문 기법을 다 넣으면 다 좋다"가 아니라 **실측으로 효과가 있는 것(빈테이블 보강·pruning)과
+없는 것(backprop)을 가렸다.**
+
 ---
 ## (이하 최초 PoC 측정)
 

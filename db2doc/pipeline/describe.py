@@ -155,8 +155,66 @@ def _calibrate(tinfo, obj):
     return obj
 
 
-def describe(profile, relations, progress=None):
-    """Return {"model", "db", "tables", "usage"} — same shape as PoC."""
+# backpropagation pass — adapted from MemberJunction/MJ backpropagation.md (MIT)
+REVISE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "needsRevision": {"type": "boolean"},
+        "revisedDescription": {"type": "string"},
+        "reasoning": {"type": "string"},
+        "confidence": {"type": "number"},
+    },
+    "required": ["needsRevision"],
+}
+
+REVISE_SYSTEM = (
+    "You may revise a parent table's description using insights from its child "
+    "tables (tables that reference it). Revise ONLY if the children reveal the "
+    "table serves a different purpose, clarify ambiguity, or change the meaning. "
+    "Do NOT revise if children merely confirm the current description. Reference "
+    "the insights explicitly in your reasoning."
+)
+
+
+def backpropagate(profile, relations, table_descs, progress=None):
+    """One backward pass: for each parent (referenced by children), re-check its
+    description against child descriptions; revise if warranted. Mutates
+    table_descs. Returns (revised_count, usage)."""
+    # children-of: parent -> [child descriptions]
+    children = {}
+    for fk in relations.get("foreign_keys", []):
+        p, c = fk["parent_table"], fk["child_table"]
+        if p in table_descs and c in table_descs and p != c:
+            children.setdefault(p, set()).add(c)
+    revised, tin, tout = 0, 0, 0
+    parents = list(children.keys())
+    for i, p in enumerate(parents, 1):
+        insights = [{"child": c,
+                     "description": table_descs[c]["table_description"]}
+                    for c in sorted(children[p])]
+        payload = {"table": p,
+                   "current_description": table_descs[p]["table_description"],
+                   "child_insights": insights}
+        obj, usage = claude_json(
+            "Reconsider this parent table's description given its children.\n\n"
+            + json.dumps(payload, ensure_ascii=False, indent=2),
+            REVISE_SCHEMA, system=REVISE_SYSTEM, max_tokens=1024)
+        tin += usage.get("input_tokens", 0)
+        tout += usage.get("output_tokens", 0)
+        if obj.get("needsRevision") and obj.get("revisedDescription"):
+            table_descs[p]["table_description"] = obj["revisedDescription"]
+            table_descs[p]["revised"] = True
+            revised += 1
+        if progress:
+            progress(i, len(parents), p)
+    return revised, {"input_tokens": tin, "output_tokens": tout}
+
+
+def describe(profile, relations, progress=None, backprop_passes=0):
+    """Return {"model", "db", "tables", "usage"} — same shape as PoC.
+
+    backprop_passes: number of backward refinement passes after the forward
+    pass (0 = none, like before; 1-2 = iterative refinement)."""
     order = fk_order(profile, relations)
     table_descs, total_in, total_out = {}, 0, 0
     n = len(order)
@@ -173,6 +231,17 @@ def describe(profile, relations, progress=None):
         total_out += usage.get("output_tokens", 0)
         if progress:
             progress(i, n, t)
+
+    # backward refinement passes (child insights -> parent descriptions)
+    for p in range(backprop_passes):
+        revised, usage = backpropagate(profile, relations, table_descs)
+        total_in += usage.get("input_tokens", 0)
+        total_out += usage.get("output_tokens", 0)
+        if progress:
+            progress(n, n, f"backprop pass {p+1}: revised {revised}")
+        if revised == 0:
+            break  # converged
+
     db_obj, usage = synthesize_db(table_descs)
     total_in += usage.get("input_tokens", 0)
     total_out += usage.get("output_tokens", 0)
