@@ -6,12 +6,24 @@ dict.  Reuses claude_json from bedrock.py (Opus 4.8, JSON-schema-forced).
 import json
 from ..bedrock import claude_json, MODEL_ID
 
+# Prompt guidance adapted from MemberJunction/MJ DBAutoDoc table-analysis.md (MIT).
 SYSTEM = (
     "You are a senior data analyst reverse-engineering an undocumented database. "
     "You are given only physical schema (table/column names, types), data statistics, "
     "and sample values — no documentation. Infer the real-world meaning concisely and "
-    "factually. Do not invent facts the data does not support. Descriptions must be "
-    "specific (mention units, what a code/id refers to, the entity a table records)."
+    "factually.\n"
+    "Rules:\n"
+    "- Use the evidence: column names, recovered FK relationships, sample values, and "
+    "cardinality patterns. A FK reveals what a column points to — use it.\n"
+    "- Low-cardinality columns (few distinct values) are likely codes/enums: use the "
+    "actual sample values to explain what the code holds. If a coded column's concrete "
+    "meaning is NOT evidenced by the data, say it is a code/enum and what it likely "
+    "encodes, but do NOT invent specific label mappings.\n"
+    "- Do NOT make up table or column names. Only refer to names given in the input.\n"
+    "- Do not state facts the data does not support.\n"
+    "- Confidence is 0-1 and must be conservative: use < 0.7 when the meaning is "
+    "ambiguous or the table has little/no data to verify it. Reserve high confidence "
+    "for cases the names + data clearly support."
 )
 
 TABLE_SCHEMA = {
@@ -21,6 +33,11 @@ TABLE_SCHEMA = {
             "type": "string",
             "description": "1-2 sentences: what entity or event this table records.",
         },
+        "reasoning": {
+            "type": "string",
+            "description": "Brief: which evidence (names, FKs, sample values, "
+                           "cardinality) led to this table's interpretation.",
+        },
         "columns": {
             "type": "array",
             "items": {
@@ -29,11 +46,12 @@ TABLE_SCHEMA = {
                     "name": {"type": "string"},
                     "description": {
                         "type": "string",
-                        "description": "What this column means; for *_concept_id / coded "
-                                       "columns, what kind of code it holds.",
+                        "description": "What this column means; for coded/enum columns, "
+                                       "what kind of code it holds (no invented mappings).",
                     },
                     "confidence": {"type": "number",
-                                   "description": "0..1 confidence."},
+                                   "description": "0..1, conservative (<0.7 if ambiguous "
+                                                  "or little data to verify)."},
                 },
                 "required": ["name", "description", "confidence"],
             },
@@ -119,6 +137,24 @@ def synthesize_db(table_descs):
         DB_SCHEMA, system=SYSTEM, max_tokens=1024)
 
 
+def _calibrate(tinfo, obj):
+    """Evidence-based confidence penalty.
+
+    The model tends to be overconfident on empty tables (no data to verify).
+    Penalize column confidence when the column has no measured sample / no
+    distribution to back the claim. Flags such items as data-unverified.
+    """
+    stats_by_col = {c["name"]: c["stats"] for c in tinfo["columns"]}
+    empty_table = not any(s.get("sampled") for s in stats_by_col.values())
+    for c in obj.get("columns", []):
+        st = stats_by_col.get(c["name"], {})
+        unverified = empty_table or not st.get("sampled") or not st.get("top_values")
+        if unverified and c.get("confidence") is not None:
+            c["confidence"] = round(c["confidence"] * 0.5, 2)
+            c["data_unverified"] = True
+    return obj
+
+
 def describe(profile, relations, progress=None):
     """Return {"model", "db", "tables", "usage"} — same shape as PoC."""
     order = fk_order(profile, relations)
@@ -132,7 +168,7 @@ def describe(profile, relations, progress=None):
                 neighbours[fk["parent_table"]] = \
                     table_descs[fk["parent_table"]]["table_description"]
         obj, usage = describe_table(t, tinfo, relations, neighbours)
-        table_descs[t] = obj
+        table_descs[t] = _calibrate(tinfo, obj)
         total_in += usage.get("input_tokens", 0)
         total_out += usage.get("output_tokens", 0)
         if progress:

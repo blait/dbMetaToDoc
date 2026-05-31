@@ -35,17 +35,49 @@ def pk_score(table, col, ncols):
     return 50 * f_u + 20 * n + 15 * d + 15 * p
 
 
+def _has_data(tinfo):
+    """True if at least one column has a measured sample (table not empty)."""
+    for c in tinfo["columns"]:
+        if c["stats"].get("sampled"):
+            return True
+    return False
+
+
 def detect_pks(profile):
+    """Detect a PK per table.
+
+    - tables with data: statistical sPK score (>= threshold).
+    - empty tables (no rows -> no stats): name-based fallback (`<table>_id` or
+      a lone `*_id`/`id`), emitted with low confidence + source='name'.
+    """
     pks = {}
     for table, tinfo in profile["tables"].items():
         ncols = len(tinfo["columns"])
-        best = None
-        for col in tinfo["columns"]:
-            sc = pk_score(table, col, ncols)
-            if best is None or sc > best[1]:
-                best = (col["name"], sc)
-        if best and best[1] >= PK_THRESHOLD:
-            pks[table] = {"column": best[0], "score": round(best[1], 1)}
+        if _has_data(tinfo):
+            best = None
+            for col in tinfo["columns"]:
+                sc = pk_score(table, col, ncols)
+                if best is None or sc > best[1]:
+                    best = (col["name"], sc)
+            if best and best[1] >= PK_THRESHOLD:
+                pks[table] = {"column": best[0], "score": round(best[1], 1),
+                              "confidence": round(min(best[1] / 100, 0.99), 2),
+                              "source": "stat"}
+        else:
+            # empty table: infer PK from naming only (low confidence)
+            cand = None
+            names = {c["name"].lower(): c for c in tinfo["columns"]}
+            if f"{table.lower()}_id" in names:
+                cand = names[f"{table.lower()}_id"]["name"]
+            else:
+                id_cols = [c["name"] for c in tinfo["columns"]
+                           if c["name"].lower().endswith("_id")
+                           or c["name"].lower() == "id"]
+                if len(id_cols) == 1:
+                    cand = id_cols[0]
+            if cand:
+                pks[table] = {"column": cand, "score": 0.0,
+                              "confidence": 0.4, "source": "name"}
     return pks
 
 
@@ -139,12 +171,100 @@ def detect_fks(engine, schema, profile, pks):
     return list(best.values())
 
 
-def recover_relations(engine, schema, profile, progress=None):
-    """Return {"primary_keys": {...}, "foreign_keys": [...]}."""
+def name_based_fks(profile, pks):
+    """FK candidates from naming only (no data needed).
+
+    For any `*_id` column (not the table's own PK) whose stem matches a table
+    that has a detected PK, emit a low-confidence FK. Used to recover FKs that
+    value-overlap cannot see (empty tables, or values not loaded).
+    """
+    parents = {t: info["column"] for t, info in pks.items()}
+    out = []
+    for ct, tinfo in profile["tables"].items():
+        ct_pk = pks.get(ct, {}).get("column")
+        for col in tinfo["columns"]:
+            cname = col["name"]
+            if cname == ct_pk:
+                continue
+            if not (cname.lower().endswith("_id") or cname.lower() == "id"):
+                continue
+            if not _is_int(col["data_type"]):
+                continue
+            for pt, ppk in parents.items():
+                if pt == ct:
+                    continue
+                sim = name_similarity(cname, pt, ppk)
+                if sim >= 1.0:   # only strong name matches (e.g. <parent>_id)
+                    out.append({
+                        "child_table": ct, "child_column": cname,
+                        "parent_table": pt, "parent_column": ppk,
+                        "inclusion": None, "name_sim": sim,
+                        "score": round(20 * sim, 1), "tested": 0,
+                        "confidence": 0.4, "source": "name"})
+                    break
+    return out
+
+
+def recover_relations(engine, schema, profile, progress=None, use_declared=True):
+    """Return {"primary_keys": {...}, "foreign_keys": [...]}.
+
+    Order of trust: declared (from catalog) > statistical (value-verified) >
+    name-based (low confidence, for empty/unloaded tables).
+    """
+    declared_pk, declared_fk = {}, []
+    if use_declared:
+        try:
+            declared_pk, declared_fk = _declared_keys(engine, schema, profile)
+        except Exception:
+            declared_pk, declared_fk = {}, []
+
     pks = detect_pks(profile)
+    # declared PK wins where present
+    for t, col in declared_pk.items():
+        pks[t] = {"column": col, "score": 100.0, "confidence": 1.0,
+                  "source": "declared"}
     if progress:
         progress("pk", len(pks))
+
     fks = detect_fks(engine, schema, profile, pks)
+    for fk in fks:
+        fk.setdefault("confidence", round(min(fk["score"] / 100, 0.99), 2))
+        fk.setdefault("source", "stat")
+
+    # add name-based FK candidates for (child_table, child_column) not already found
+    seen = {(f["child_table"], f["child_column"]) for f in fks}
+    for nf in name_based_fks(profile, pks):
+        if (nf["child_table"], nf["child_column"]) not in seen:
+            fks.append(nf)
+            seen.add((nf["child_table"], nf["child_column"]))
+
+    # declared FK wins / adds (highest trust)
+    for df in declared_fk:
+        key = (df["child_table"], df["child_column"])
+        fks = [f for f in fks if (f["child_table"], f["child_column"]) != key]
+        df.update(confidence=1.0, source="declared", score=100.0)
+        fks.append(df)
+
     if progress:
         progress("fk", len(fks))
     return {"primary_keys": pks, "foreign_keys": fks}
+
+
+def _declared_keys(engine, schema, profile):
+    """Read PK/FK already declared in the catalog (Inspector)."""
+    from ..targets import inspect as I
+    dpk, dfk = {}, []
+    for table in profile["tables"].keys():
+        pkcols = I.get_declared_pk(engine, schema, table)
+        if len(pkcols) == 1:           # single-column PK
+            dpk[table] = pkcols[0]
+        for fk in I.get_declared_fks(engine, schema, table):
+            cc = fk.get("child_columns") or []
+            pc = fk.get("parent_columns") or []
+            if len(cc) == 1 and fk.get("parent_table"):
+                dfk.append({
+                    "child_table": table, "child_column": cc[0],
+                    "parent_table": fk["parent_table"],
+                    "parent_column": pc[0] if pc else None,
+                    "inclusion": None, "name_sim": None, "tested": 0})
+    return dpk, dfk

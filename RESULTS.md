@@ -3,6 +3,26 @@
 문서가 전혀 없는 DB(OMOP CDM 5.3, GiBleed 합성데이터)에서 **스키마 + 샘플 튜플만으로**
 의미 description을 자동 복원하고, OMOP 공식 데이터 딕셔너리(정답지)와 대조해 채점한 결과.
 
+## 업그레이드 결과 (DBAutoDoc 논문/오픈소스 MIT 차용 — IMPROVEMENTS.md 참조)
+
+빈 테이블 이름기반 PK/FK 보강 + 선언키 채택 + 설명 프롬프트 강화(enum/hallucination 가드/보수적
+confidence) + 증거기반 confidence 보정을 적용한 ablation 결과:
+
+| 지표 | baseline | 개선 후 |
+|---|---|---|
+| **PK F1** | 0.667 (recall 0.538) | **0.912 (recall 1.0)** |
+| **FK F1** | 0.394 (recall 0.248) | **0.619 (recall 0.471)** |
+| 컬럼 설명 judge | 0.931 | **0.938** |
+| 테이블 설명 judge | 1.0 | 1.0 |
+| **S_overall** | 0.687 | **0.840** |
+| 빈 테이블 컬럼 평균 confidence | 0.917(과신) | **0.427**(보정됨) — 233개 "data_unverified" 플래그 → 검수 큐 |
+
+핵심: 빈 테이블 보강으로 **PK recall 1.0 달성**, FK recall 약 2배. confidence 보정으로 "검증 못 한
+설명을 과신"하던 문제 해소 → Review Queue triage가 실제로 작동. 출처: MemberJunction/MJ (MIT).
+
+---
+## (이하 최초 PoC 측정)
+
 - 대상: AWS RDS PostgreSQL 16, OMOP CDM 5.3, 37 테이블 / 411k 행 (GiBleed)
 - 모델: AWS Bedrock **Claude Opus 4.8** (`us.anthropic.claude-opus-4-8`)
 - 입력: 테이블/컬럼명·타입 + 샘플 통계(테이블당 ≤1000행). **FK·comment 제거 상태**.

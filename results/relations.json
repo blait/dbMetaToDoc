@@ -1,68 +1,190 @@
 {
   "primary_keys": {
+    "attribute_definition": {
+      "column": "attribute_definition_id",
+      "score": 0.0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    "care_site": {
+      "column": "care_site_id",
+      "score": 0.0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    "cohort_definition": {
+      "column": "cohort_definition_id",
+      "score": 0.0,
+      "confidence": 0.4,
+      "source": "name"
+    },
     "concept": {
       "column": "concept_id",
-      "score": 100.0
+      "score": 100.0,
+      "confidence": 0.99,
+      "source": "stat"
     },
     "concept_ancestor": {
       "column": "ancestor_concept_id",
-      "score": 84.0
+      "score": 84.0,
+      "confidence": 0.84,
+      "source": "stat"
+    },
+    "concept_class": {
+      "column": "concept_class_id",
+      "score": 0.0,
+      "confidence": 0.4,
+      "source": "name"
     },
     "concept_relationship": {
       "column": "concept_id_1",
-      "score": 73.8
+      "score": 73.8,
+      "confidence": 0.74,
+      "source": "stat"
     },
     "condition_era": {
       "column": "condition_era_id",
-      "score": 100.0
+      "score": 100.0,
+      "confidence": 0.99,
+      "source": "stat"
     },
     "condition_occurrence": {
       "column": "condition_occurrence_id",
-      "score": 100.0
+      "score": 100.0,
+      "confidence": 0.99,
+      "source": "stat"
+    },
+    "cost": {
+      "column": "cost_id",
+      "score": 0.0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    "device_exposure": {
+      "column": "device_exposure_id",
+      "score": 0.0,
+      "confidence": 0.4,
+      "source": "name"
     },
     "domain": {
       "column": "domain_id",
-      "score": 89.5
+      "score": 89.5,
+      "confidence": 0.9,
+      "source": "stat"
+    },
+    "dose_era": {
+      "column": "dose_era_id",
+      "score": 0.0,
+      "confidence": 0.4,
+      "source": "name"
     },
     "drug_era": {
       "column": "drug_era_id",
-      "score": 100.0
+      "score": 100.0,
+      "confidence": 0.99,
+      "source": "stat"
     },
     "drug_exposure": {
       "column": "drug_exposure_id",
-      "score": 100.0
+      "score": 100.0,
+      "confidence": 0.99,
+      "source": "stat"
+    },
+    "fact_relationship": {
+      "column": "relationship_concept_id",
+      "score": 0.0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    "location": {
+      "column": "location_id",
+      "score": 0.0,
+      "confidence": 0.4,
+      "source": "name"
     },
     "measurement": {
       "column": "measurement_id",
-      "score": 100.0
+      "score": 100.0,
+      "confidence": 0.99,
+      "source": "stat"
+    },
+    "note": {
+      "column": "note_id",
+      "score": 0.0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    "note_nlp": {
+      "column": "note_nlp_id",
+      "score": 0.0,
+      "confidence": 0.4,
+      "source": "name"
     },
     "observation": {
       "column": "observation_id",
-      "score": 99.9
+      "score": 99.9,
+      "confidence": 0.99,
+      "source": "stat"
     },
     "observation_period": {
       "column": "observation_period_id",
-      "score": 100.0
+      "score": 100.0,
+      "confidence": 0.99,
+      "source": "stat"
+    },
+    "payer_plan_period": {
+      "column": "payer_plan_period_id",
+      "score": 0.0,
+      "confidence": 0.4,
+      "source": "name"
     },
     "person": {
       "column": "person_id",
-      "score": 100.0
+      "score": 100.0,
+      "confidence": 0.99,
+      "source": "stat"
     },
     "procedure_occurrence": {
       "column": "procedure_occurrence_id",
-      "score": 100.0
+      "score": 100.0,
+      "confidence": 0.99,
+      "source": "stat"
+    },
+    "provider": {
+      "column": "provider_id",
+      "score": 0.0,
+      "confidence": 0.4,
+      "source": "name"
     },
     "relationship": {
       "column": "relationship_id",
-      "score": 89.5
+      "score": 89.5,
+      "confidence": 0.9,
+      "source": "stat"
+    },
+    "specimen": {
+      "column": "specimen_id",
+      "score": 0.0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    "visit_detail": {
+      "column": "visit_detail_id",
+      "score": 0.0,
+      "confidence": 0.4,
+      "source": "name"
     },
     "visit_occurrence": {
       "column": "visit_occurrence_id",
-      "score": 100.0
+      "score": 100.0,
+      "confidence": 0.99,
+      "source": "stat"
     },
     "vocabulary": {
       "column": "vocabulary_id",
-      "score": 89.5
+      "score": 89.5,
+      "confidence": 0.9,
+      "source": "stat"
     }
   },
   "foreign_keys": [
@@ -74,7 +196,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 92.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.92,
+      "source": "stat"
     },
     {
       "child_table": "concept_synonym",
@@ -84,7 +208,9 @@
       "inclusion": 1.0,
       "name_sim": 1.0,
       "score": 98.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.98,
+      "source": "stat"
     },
     {
       "child_table": "condition_era",
@@ -94,7 +220,9 @@
       "inclusion": 1.0,
       "name_sim": 1.0,
       "score": 98.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.98,
+      "source": "stat"
     },
     {
       "child_table": "condition_era",
@@ -104,7 +232,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 92.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.92,
+      "source": "stat"
     },
     {
       "child_table": "condition_occurrence",
@@ -114,7 +244,9 @@
       "inclusion": 1.0,
       "name_sim": 1.0,
       "score": 98.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.98,
+      "source": "stat"
     },
     {
       "child_table": "condition_occurrence",
@@ -124,7 +256,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 92.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.92,
+      "source": "stat"
     },
     {
       "child_table": "condition_occurrence",
@@ -134,7 +268,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "condition_occurrence",
@@ -144,7 +280,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "drug_era",
@@ -154,7 +292,9 @@
       "inclusion": 1.0,
       "name_sim": 1.0,
       "score": 98.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.98,
+      "source": "stat"
     },
     {
       "child_table": "drug_era",
@@ -164,7 +304,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 92.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.92,
+      "source": "stat"
     },
     {
       "child_table": "drug_exposure",
@@ -174,7 +316,9 @@
       "inclusion": 1.0,
       "name_sim": 1.0,
       "score": 98.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.98,
+      "source": "stat"
     },
     {
       "child_table": "drug_exposure",
@@ -184,7 +328,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 92.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.92,
+      "source": "stat"
     },
     {
       "child_table": "drug_exposure",
@@ -194,7 +340,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "drug_exposure",
@@ -204,7 +352,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "measurement",
@@ -214,7 +364,9 @@
       "inclusion": 1.0,
       "name_sim": 1.0,
       "score": 98.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.98,
+      "source": "stat"
     },
     {
       "child_table": "measurement",
@@ -224,7 +376,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 92.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.92,
+      "source": "stat"
     },
     {
       "child_table": "measurement",
@@ -234,7 +388,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "measurement",
@@ -244,7 +400,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "measurement",
@@ -254,7 +412,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "measurement",
@@ -264,7 +424,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "observation",
@@ -274,7 +436,9 @@
       "inclusion": 1.0,
       "name_sim": 1.0,
       "score": 98.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.98,
+      "source": "stat"
     },
     {
       "child_table": "observation",
@@ -284,7 +448,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 92.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.92,
+      "source": "stat"
     },
     {
       "child_table": "observation",
@@ -294,7 +460,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "observation",
@@ -304,7 +472,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "observation",
@@ -314,7 +484,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "observation",
@@ -324,7 +496,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "observation_period",
@@ -334,7 +508,9 @@
       "inclusion": 0.545,
       "name_sim": 1.0,
       "score": 79.8,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.8,
+      "source": "stat"
     },
     {
       "child_table": "person",
@@ -344,7 +520,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 92.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.92,
+      "source": "stat"
     },
     {
       "child_table": "person",
@@ -354,7 +532,9 @@
       "inclusion": 0.86,
       "name_sim": 0.7,
       "score": 86.4,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.86,
+      "source": "stat"
     },
     {
       "child_table": "person",
@@ -364,7 +544,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "person",
@@ -374,7 +556,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "person",
@@ -384,7 +568,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "procedure_occurrence",
@@ -394,7 +580,9 @@
       "inclusion": 1.0,
       "name_sim": 1.0,
       "score": 98.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.98,
+      "source": "stat"
     },
     {
       "child_table": "procedure_occurrence",
@@ -404,7 +592,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 92.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.92,
+      "source": "stat"
     },
     {
       "child_table": "procedure_occurrence",
@@ -414,7 +604,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "procedure_occurrence",
@@ -424,7 +616,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "visit_occurrence",
@@ -434,7 +628,9 @@
       "inclusion": 1.0,
       "name_sim": 1.0,
       "score": 98.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.98,
+      "source": "stat"
     },
     {
       "child_table": "visit_occurrence",
@@ -444,7 +640,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 92.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.92,
+      "source": "stat"
     },
     {
       "child_table": "visit_occurrence",
@@ -454,7 +652,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "visit_occurrence",
@@ -464,7 +664,9 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
     },
     {
       "child_table": "visit_occurrence",
@@ -474,7 +676,501 @@
       "inclusion": 1.0,
       "name_sim": 0.7,
       "score": 94.0,
-      "tested": 200
+      "tested": 200,
+      "confidence": 0.94,
+      "source": "stat"
+    },
+    {
+      "child_table": "care_site",
+      "child_column": "location_id",
+      "parent_table": "location",
+      "parent_column": "location_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "condition_occurrence",
+      "child_column": "provider_id",
+      "parent_table": "provider",
+      "parent_column": "provider_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "condition_occurrence",
+      "child_column": "visit_occurrence_id",
+      "parent_table": "visit_occurrence",
+      "parent_column": "visit_occurrence_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "condition_occurrence",
+      "child_column": "visit_detail_id",
+      "parent_table": "visit_detail",
+      "parent_column": "visit_detail_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "cost",
+      "child_column": "payer_plan_period_id",
+      "parent_table": "payer_plan_period",
+      "parent_column": "payer_plan_period_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "death",
+      "child_column": "person_id",
+      "parent_table": "person",
+      "parent_column": "person_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "device_exposure",
+      "child_column": "person_id",
+      "parent_table": "person",
+      "parent_column": "person_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "device_exposure",
+      "child_column": "provider_id",
+      "parent_table": "provider",
+      "parent_column": "provider_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "device_exposure",
+      "child_column": "visit_occurrence_id",
+      "parent_table": "visit_occurrence",
+      "parent_column": "visit_occurrence_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "device_exposure",
+      "child_column": "visit_detail_id",
+      "parent_table": "visit_detail",
+      "parent_column": "visit_detail_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "dose_era",
+      "child_column": "person_id",
+      "parent_table": "person",
+      "parent_column": "person_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "drug_exposure",
+      "child_column": "provider_id",
+      "parent_table": "provider",
+      "parent_column": "provider_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "drug_exposure",
+      "child_column": "visit_occurrence_id",
+      "parent_table": "visit_occurrence",
+      "parent_column": "visit_occurrence_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "drug_exposure",
+      "child_column": "visit_detail_id",
+      "parent_table": "visit_detail",
+      "parent_column": "visit_detail_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "measurement",
+      "child_column": "provider_id",
+      "parent_table": "provider",
+      "parent_column": "provider_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "measurement",
+      "child_column": "visit_occurrence_id",
+      "parent_table": "visit_occurrence",
+      "parent_column": "visit_occurrence_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "measurement",
+      "child_column": "visit_detail_id",
+      "parent_table": "visit_detail",
+      "parent_column": "visit_detail_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "note",
+      "child_column": "person_id",
+      "parent_table": "person",
+      "parent_column": "person_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "note",
+      "child_column": "provider_id",
+      "parent_table": "provider",
+      "parent_column": "provider_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "note",
+      "child_column": "visit_occurrence_id",
+      "parent_table": "visit_occurrence",
+      "parent_column": "visit_occurrence_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "note",
+      "child_column": "visit_detail_id",
+      "parent_table": "visit_detail",
+      "parent_column": "visit_detail_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "note_nlp",
+      "child_column": "note_id",
+      "parent_table": "note",
+      "parent_column": "note_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "observation",
+      "child_column": "provider_id",
+      "parent_table": "provider",
+      "parent_column": "provider_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "observation",
+      "child_column": "visit_occurrence_id",
+      "parent_table": "visit_occurrence",
+      "parent_column": "visit_occurrence_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "observation",
+      "child_column": "visit_detail_id",
+      "parent_table": "visit_detail",
+      "parent_column": "visit_detail_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "payer_plan_period",
+      "child_column": "person_id",
+      "parent_table": "person",
+      "parent_column": "person_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "person",
+      "child_column": "location_id",
+      "parent_table": "location",
+      "parent_column": "location_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "person",
+      "child_column": "provider_id",
+      "parent_table": "provider",
+      "parent_column": "provider_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "person",
+      "child_column": "care_site_id",
+      "parent_table": "care_site",
+      "parent_column": "care_site_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "procedure_occurrence",
+      "child_column": "provider_id",
+      "parent_table": "provider",
+      "parent_column": "provider_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "procedure_occurrence",
+      "child_column": "visit_occurrence_id",
+      "parent_table": "visit_occurrence",
+      "parent_column": "visit_occurrence_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "procedure_occurrence",
+      "child_column": "visit_detail_id",
+      "parent_table": "visit_detail",
+      "parent_column": "visit_detail_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "provider",
+      "child_column": "care_site_id",
+      "parent_table": "care_site",
+      "parent_column": "care_site_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "relationship",
+      "child_column": "relationship_concept_id",
+      "parent_table": "fact_relationship",
+      "parent_column": "relationship_concept_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "specimen",
+      "child_column": "person_id",
+      "parent_table": "person",
+      "parent_column": "person_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "visit_detail",
+      "child_column": "person_id",
+      "parent_table": "person",
+      "parent_column": "person_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "visit_detail",
+      "child_column": "provider_id",
+      "parent_table": "provider",
+      "parent_column": "provider_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "visit_detail",
+      "child_column": "care_site_id",
+      "parent_table": "care_site",
+      "parent_column": "care_site_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "visit_detail",
+      "child_column": "visit_occurrence_id",
+      "parent_table": "visit_occurrence",
+      "parent_column": "visit_occurrence_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "visit_occurrence",
+      "child_column": "provider_id",
+      "parent_table": "provider",
+      "parent_column": "provider_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
+    },
+    {
+      "child_table": "visit_occurrence",
+      "child_column": "care_site_id",
+      "parent_table": "care_site",
+      "parent_column": "care_site_id",
+      "inclusion": null,
+      "name_sim": 1.0,
+      "score": 20.0,
+      "tested": 0,
+      "confidence": 0.4,
+      "source": "name"
     }
   ]
 }
