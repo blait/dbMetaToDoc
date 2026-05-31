@@ -39,6 +39,17 @@ set -a; source .env; set +a
 4. **Review Queue** → 신뢰도 낮은 항목 검수(approve/reject), ≥0.9 일괄 승인
 5. **Export** → COMMENT SQL / Markdown / CSV / Mermaid 내려받기
 
+## 의미 추론 방식 (요약)
+문서가 없으므로 **데이터에서 단서를 모아 LLM에 넘기고 LLM이 의미를 추론**한다. 자세한 메커니즘은
+루트 [`README.md`](../README.md#db--테이블--컬럼의-의미를-추론하는-방식) 참고. 요지:
+- **컬럼 단서**(`pipeline/describe.py` + `targets/stats.py`): 이름·타입·카디널리티(distinct_ratio)·
+  null 비율·min/max·top-k 분포 + **복원된 FK**(값 포함관계로 탐지).
+- **LLM 호출**: 테이블 1개당 1회, system="데이터가 뒷받침 안 하면 지어내지 말 것" + user=JSON 단서.
+  출력은 JSON 스키마 강제, 항목마다 **confidence**.
+- **합성**: 컬럼→테이블(FK 순서, 이웃 설명 컨텍스트)→DB 전체.
+- **한계**: 구조적 사실(식별자/코드값/FK)은 데이터로 확정되지만, 코드값의 구체 의미처럼 데이터에
+  매핑이 없는 것은 확정 불가 → confidence 낮음 → **Review Queue에서 사람이 확정**. 자동은 초안.
+
 ## 보안
 - 대상 DB 비밀번호는 **Fernet 대칭암호화**로 `sources.secret_ref`에 저장(평문 금지).
   마스터키 = env `DB2DOC_SECRET_KEY` 또는 `secrets/master.key`(0600, gitignore).
