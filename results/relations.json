@@ -1,0 +1,480 @@
+{
+  "primary_keys": {
+    "concept": {
+      "column": "concept_id",
+      "score": 100.0
+    },
+    "concept_ancestor": {
+      "column": "ancestor_concept_id",
+      "score": 84.0
+    },
+    "concept_relationship": {
+      "column": "concept_id_1",
+      "score": 73.8
+    },
+    "condition_era": {
+      "column": "condition_era_id",
+      "score": 100.0
+    },
+    "condition_occurrence": {
+      "column": "condition_occurrence_id",
+      "score": 100.0
+    },
+    "domain": {
+      "column": "domain_id",
+      "score": 89.5
+    },
+    "drug_era": {
+      "column": "drug_era_id",
+      "score": 100.0
+    },
+    "drug_exposure": {
+      "column": "drug_exposure_id",
+      "score": 100.0
+    },
+    "measurement": {
+      "column": "measurement_id",
+      "score": 100.0
+    },
+    "observation": {
+      "column": "observation_id",
+      "score": 99.9
+    },
+    "observation_period": {
+      "column": "observation_period_id",
+      "score": 100.0
+    },
+    "person": {
+      "column": "person_id",
+      "score": 100.0
+    },
+    "procedure_occurrence": {
+      "column": "procedure_occurrence_id",
+      "score": 100.0
+    },
+    "relationship": {
+      "column": "relationship_id",
+      "score": 89.5
+    },
+    "visit_occurrence": {
+      "column": "visit_occurrence_id",
+      "score": 100.0
+    },
+    "vocabulary": {
+      "column": "vocabulary_id",
+      "score": 89.5
+    }
+  },
+  "foreign_keys": [
+    {
+      "child_table": "concept_ancestor",
+      "child_column": "descendant_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 92.0,
+      "tested": 200
+    },
+    {
+      "child_table": "concept_synonym",
+      "child_column": "concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 1.0,
+      "score": 98.0,
+      "tested": 200
+    },
+    {
+      "child_table": "condition_era",
+      "child_column": "person_id",
+      "parent_table": "person",
+      "parent_column": "person_id",
+      "inclusion": 1.0,
+      "name_sim": 1.0,
+      "score": 98.0,
+      "tested": 200
+    },
+    {
+      "child_table": "condition_era",
+      "child_column": "condition_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 92.0,
+      "tested": 200
+    },
+    {
+      "child_table": "condition_occurrence",
+      "child_column": "person_id",
+      "parent_table": "person",
+      "parent_column": "person_id",
+      "inclusion": 1.0,
+      "name_sim": 1.0,
+      "score": 98.0,
+      "tested": 200
+    },
+    {
+      "child_table": "condition_occurrence",
+      "child_column": "condition_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 92.0,
+      "tested": 200
+    },
+    {
+      "child_table": "condition_occurrence",
+      "child_column": "condition_status_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "condition_occurrence",
+      "child_column": "condition_source_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "drug_era",
+      "child_column": "person_id",
+      "parent_table": "person",
+      "parent_column": "person_id",
+      "inclusion": 1.0,
+      "name_sim": 1.0,
+      "score": 98.0,
+      "tested": 200
+    },
+    {
+      "child_table": "drug_era",
+      "child_column": "drug_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 92.0,
+      "tested": 200
+    },
+    {
+      "child_table": "drug_exposure",
+      "child_column": "person_id",
+      "parent_table": "person",
+      "parent_column": "person_id",
+      "inclusion": 1.0,
+      "name_sim": 1.0,
+      "score": 98.0,
+      "tested": 200
+    },
+    {
+      "child_table": "drug_exposure",
+      "child_column": "drug_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 92.0,
+      "tested": 200
+    },
+    {
+      "child_table": "drug_exposure",
+      "child_column": "route_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "drug_exposure",
+      "child_column": "drug_source_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "measurement",
+      "child_column": "person_id",
+      "parent_table": "person",
+      "parent_column": "person_id",
+      "inclusion": 1.0,
+      "name_sim": 1.0,
+      "score": 98.0,
+      "tested": 200
+    },
+    {
+      "child_table": "measurement",
+      "child_column": "measurement_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 92.0,
+      "tested": 200
+    },
+    {
+      "child_table": "measurement",
+      "child_column": "operator_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "measurement",
+      "child_column": "value_as_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "measurement",
+      "child_column": "unit_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "measurement",
+      "child_column": "measurement_source_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "observation",
+      "child_column": "person_id",
+      "parent_table": "person",
+      "parent_column": "person_id",
+      "inclusion": 1.0,
+      "name_sim": 1.0,
+      "score": 98.0,
+      "tested": 200
+    },
+    {
+      "child_table": "observation",
+      "child_column": "observation_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 92.0,
+      "tested": 200
+    },
+    {
+      "child_table": "observation",
+      "child_column": "value_as_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "observation",
+      "child_column": "qualifier_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "observation",
+      "child_column": "unit_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "observation",
+      "child_column": "observation_source_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "observation_period",
+      "child_column": "person_id",
+      "parent_table": "person",
+      "parent_column": "person_id",
+      "inclusion": 0.545,
+      "name_sim": 1.0,
+      "score": 79.8,
+      "tested": 200
+    },
+    {
+      "child_table": "person",
+      "child_column": "gender_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 92.0,
+      "tested": 200
+    },
+    {
+      "child_table": "person",
+      "child_column": "ethnicity_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 0.86,
+      "name_sim": 0.7,
+      "score": 86.4,
+      "tested": 200
+    },
+    {
+      "child_table": "person",
+      "child_column": "gender_source_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "person",
+      "child_column": "race_source_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "person",
+      "child_column": "ethnicity_source_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "procedure_occurrence",
+      "child_column": "person_id",
+      "parent_table": "person",
+      "parent_column": "person_id",
+      "inclusion": 1.0,
+      "name_sim": 1.0,
+      "score": 98.0,
+      "tested": 200
+    },
+    {
+      "child_table": "procedure_occurrence",
+      "child_column": "procedure_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 92.0,
+      "tested": 200
+    },
+    {
+      "child_table": "procedure_occurrence",
+      "child_column": "modifier_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "procedure_occurrence",
+      "child_column": "procedure_source_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "visit_occurrence",
+      "child_column": "person_id",
+      "parent_table": "person",
+      "parent_column": "person_id",
+      "inclusion": 1.0,
+      "name_sim": 1.0,
+      "score": 98.0,
+      "tested": 200
+    },
+    {
+      "child_table": "visit_occurrence",
+      "child_column": "visit_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 92.0,
+      "tested": 200
+    },
+    {
+      "child_table": "visit_occurrence",
+      "child_column": "visit_source_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "visit_occurrence",
+      "child_column": "admitting_source_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    },
+    {
+      "child_table": "visit_occurrence",
+      "child_column": "discharge_to_concept_id",
+      "parent_table": "concept",
+      "parent_column": "concept_id",
+      "inclusion": 1.0,
+      "name_sim": 0.7,
+      "score": 94.0,
+      "tested": 200
+    }
+  ]
+}

@@ -47,6 +47,15 @@ DBAutoDoc `Soverall` = 0.687 (관계 recall에 눌린 값; description 품질은
 - 채점 cosine은 보조 참고용. 메인은 judge.
 - 후속 단계: 복원 메타구조 → Property Graph(openCypher) → Neptune → text2sql ON/OFF 비교.
 
+## 산출물 (저장소에 포함)
+
+실행 결과 증거는 `results/`에 커밋되어 있다 (`out/`는 재생성물이라 gitignore):
+- `results/data_dictionary.md` — 복원된 데이터 딕셔너리 (사람이 읽는 최종 산출물)
+- `results/descriptions.json` — db/table/column 설명 + confidence (원본 생성물)
+- `results/relations.json` — 복원된 PK/FK
+- `results/score.json` — 정답지 대조 채점 결과
+- `results/erd.mmd` — Mermaid ERD
+
 ## 재현
 
 ```bash

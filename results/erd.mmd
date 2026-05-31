@@ -1,0 +1,132 @@
+erDiagram
+    attribute_definition {
+    }
+    care_site {
+    }
+    cdm_source {
+    }
+    cohort_definition {
+    }
+    concept {
+        id concept_id PK
+    }
+    concept_ancestor {
+        id ancestor_concept_id PK
+    }
+    concept_class {
+    }
+    concept_relationship {
+        id concept_id_1 PK
+    }
+    concept_synonym {
+    }
+    condition_era {
+        id condition_era_id PK
+    }
+    condition_occurrence {
+        id condition_occurrence_id PK
+    }
+    cost {
+    }
+    death {
+    }
+    device_exposure {
+    }
+    domain {
+        id domain_id PK
+    }
+    dose_era {
+    }
+    drug_era {
+        id drug_era_id PK
+    }
+    drug_exposure {
+        id drug_exposure_id PK
+    }
+    drug_strength {
+    }
+    fact_relationship {
+    }
+    location {
+    }
+    measurement {
+        id measurement_id PK
+    }
+    metadata {
+    }
+    note {
+    }
+    note_nlp {
+    }
+    observation {
+        id observation_id PK
+    }
+    observation_period {
+        id observation_period_id PK
+    }
+    payer_plan_period {
+    }
+    person {
+        id person_id PK
+    }
+    procedure_occurrence {
+        id procedure_occurrence_id PK
+    }
+    provider {
+    }
+    relationship {
+        id relationship_id PK
+    }
+    source_to_concept_map {
+    }
+    specimen {
+    }
+    visit_detail {
+    }
+    visit_occurrence {
+        id visit_occurrence_id PK
+    }
+    vocabulary {
+        id vocabulary_id PK
+    }
+    concept ||--o{ concept_ancestor : "descendant_concept_id"
+    concept ||--o{ concept_synonym : "concept_id"
+    person ||--o{ condition_era : "person_id"
+    concept ||--o{ condition_era : "condition_concept_id"
+    person ||--o{ condition_occurrence : "person_id"
+    concept ||--o{ condition_occurrence : "condition_concept_id"
+    concept ||--o{ condition_occurrence : "condition_status_concept_id"
+    concept ||--o{ condition_occurrence : "condition_source_concept_id"
+    person ||--o{ drug_era : "person_id"
+    concept ||--o{ drug_era : "drug_concept_id"
+    person ||--o{ drug_exposure : "person_id"
+    concept ||--o{ drug_exposure : "drug_concept_id"
+    concept ||--o{ drug_exposure : "route_concept_id"
+    concept ||--o{ drug_exposure : "drug_source_concept_id"
+    person ||--o{ measurement : "person_id"
+    concept ||--o{ measurement : "measurement_concept_id"
+    concept ||--o{ measurement : "operator_concept_id"
+    concept ||--o{ measurement : "value_as_concept_id"
+    concept ||--o{ measurement : "unit_concept_id"
+    concept ||--o{ measurement : "measurement_source_concept_id"
+    person ||--o{ observation : "person_id"
+    concept ||--o{ observation : "observation_concept_id"
+    concept ||--o{ observation : "value_as_concept_id"
+    concept ||--o{ observation : "qualifier_concept_id"
+    concept ||--o{ observation : "unit_concept_id"
+    concept ||--o{ observation : "observation_source_concept_id"
+    person ||--o{ observation_period : "person_id"
+    concept ||--o{ person : "gender_concept_id"
+    concept ||--o{ person : "ethnicity_concept_id"
+    concept ||--o{ person : "gender_source_concept_id"
+    concept ||--o{ person : "race_source_concept_id"
+    concept ||--o{ person : "ethnicity_source_concept_id"
+    person ||--o{ procedure_occurrence : "person_id"
+    concept ||--o{ procedure_occurrence : "procedure_concept_id"
+    concept ||--o{ procedure_occurrence : "modifier_concept_id"
+    concept ||--o{ procedure_occurrence : "procedure_source_concept_id"
+    person ||--o{ visit_occurrence : "person_id"
+    concept ||--o{ visit_occurrence : "visit_concept_id"
+    concept ||--o{ visit_occurrence : "visit_source_concept_id"
+    concept ||--o{ visit_occurrence : "admitting_source_concept_id"
+    concept ||--o{ visit_occurrence : "discharge_to_concept_id"

@@ -1,0 +1,41 @@
+{
+  "description_match": {
+    "column": {
+      "n": 275,
+      "mean_cosine": 0.4811,
+      "judge_accuracy": 0.9418
+    },
+    "table": {
+      "n": 37,
+      "mean_cosine": 0.6288,
+      "judge_accuracy": 1.0
+    }
+  },
+  "relations": {
+    "primary_key_f1": {
+      "precision": 0.875,
+      "recall": 0.538,
+      "f1": 0.667,
+      "tp": 14,
+      "fp": 2,
+      "fn": 12
+    },
+    "foreign_key_f1": {
+      "precision": 0.951,
+      "recall": 0.248,
+      "f1": 0.394,
+      "tp": 39,
+      "fp": 2,
+      "fn": 118
+    }
+  },
+  "coverage": {
+    "column": 0.996,
+    "table": 1.0
+  },
+  "Soverall": 0.6874,
+  "usage_doc": {
+    "input_tokens": 81625,
+    "output_tokens": 29993
+  }
+}

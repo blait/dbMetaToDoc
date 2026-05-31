@@ -1,0 +1,2178 @@
+{
+  "model": "us.anthropic.claude-opus-4-8",
+  "db": {
+    "domain": "healthcare / clinical (OMOP CDM)",
+    "db_description": "This is a healthcare research database implemented in the OMOP Common Data Model (CDM) version 5.3.1, populated from a Synthea synthetic patient population. It standardizes longitudinal clinical data for 2,694 patients (born 1909–1985) across the full set of OMOP clinical event tables — person demographics, observation periods, visit occurrences (all coded as inpatient hospitalizations), condition occurrences and eras, drug exposures and eras, procedures, measurements, observations, and deaths — spanning records from roughly 1910 to 2019. It includes the standardized OMOP vocabulary tables (concept, concept_relationship, concept_ancestor, concept_synonym, vocabulary, domain, relationship, drug_strength) that map and hierarchically organize standardized clinical concepts drawn from terminologies such as SNOMED, RxNorm, LOINC, ICD9CM, and UCUM, plus health-system reference tables (care_site, provider, location). Several optional/derived tables (cost, payer_plan_period, attribute_definition, concept_class, metadata, fact_relationship) are present but empty. The database's purpose is to support standardized analytics and observational research on synthetic patient health records."
+  },
+  "tables": {
+    "attribute_definition": {
+      "table_description": "A metadata/lookup table from the OMOP CDM defining named attributes (e.g., cohort or measurement attributes), with each row describing one attribute, its meaning, type, and the logic/syntax used to derive it. The table is currently empty (0 rows).",
+      "columns": [
+        {
+          "name": "attribute_definition_id",
+          "description": "Unique integer identifier (primary key) for each attribute definition.",
+          "confidence": 0.92
+        },
+        {
+          "name": "attribute_name",
+          "description": "Human-readable short name/label of the attribute.",
+          "confidence": 0.9
+        },
+        {
+          "name": "attribute_description",
+          "description": "Free-text description explaining the meaning or purpose of the attribute.",
+          "confidence": 0.9
+        },
+        {
+          "name": "attribute_type_concept_id",
+          "description": "Foreign key to a vocabulary/concept table; concept id encoding the type or source of the attribute definition (e.g., how it was constructed).",
+          "confidence": 0.85
+        },
+        {
+          "name": "attribute_syntax",
+          "description": "Free-text logic or syntax (e.g., SQL or rule expression) used to compute/derive the attribute value.",
+          "confidence": 0.82
+        }
+      ]
+    },
+    "care_site": {
+      "table_description": "OMOP CDM CARE_SITE table. Each row represents a care site — a uniquely identified institutional (physical or organizational) unit where healthcare is delivered, such as a hospital, clinic, ward, or physician office.",
+      "columns": [
+        {
+          "name": "care_site_id",
+          "description": "Surrogate primary key uniquely identifying each care site.",
+          "confidence": 0.97
+        },
+        {
+          "name": "care_site_name",
+          "description": "Free-text name of the care site (e.g., hospital or clinic name).",
+          "confidence": 0.95
+        },
+        {
+          "name": "place_of_service_concept_id",
+          "description": "Foreign key to the OMOP CONCEPT table; standardized concept identifying the place of service / type of care site (e.g., inpatient, outpatient, emergency).",
+          "confidence": 0.93
+        },
+        {
+          "name": "location_id",
+          "description": "Foreign key to the OMOP LOCATION table giving the physical/geographic address of the care site.",
+          "confidence": 0.93
+        },
+        {
+          "name": "care_site_source_value",
+          "description": "The care site identifier or name as it appears in the source data, prior to mapping.",
+          "confidence": 0.92
+        },
+        {
+          "name": "place_of_service_source_value",
+          "description": "The place-of-service value as represented in the source data, prior to mapping to place_of_service_concept_id.",
+          "confidence": 0.92
+        }
+      ]
+    },
+    "cdm_source": {
+      "table_description": "OMOP Common Data Model (CDM) metadata table holding a single row that describes the source dataset and ETL provenance for this CDM instance — here a Synthea synthetic patient population converted to OMOP CDM v5.3.1.",
+      "columns": [
+        {
+          "name": "cdm_source_name",
+          "description": "Full human-readable name of the source dataset/database (e.g., 'Synthea synthetic health database').",
+          "confidence": 0.97
+        },
+        {
+          "name": "cdm_source_abbreviation",
+          "description": "Short name/abbreviation for the source (e.g., 'Synthea').",
+          "confidence": 0.97
+        },
+        {
+          "name": "cdm_holder",
+          "description": "Organization or entity that holds/maintains this CDM instance (e.g., 'OHDSI Community').",
+          "confidence": 0.95
+        },
+        {
+          "name": "source_description",
+          "description": "Free-text narrative describing the source data and its purpose.",
+          "confidence": 0.97
+        },
+        {
+          "name": "source_documentation_reference",
+          "description": "URL or citation pointing to documentation of the original source data.",
+          "confidence": 0.95
+        },
+        {
+          "name": "cdm_etl_reference",
+          "description": "URL or citation referencing the ETL process/code used to transform the source into the OMOP CDM (e.g., GitHub repo).",
+          "confidence": 0.95
+        },
+        {
+          "name": "source_release_date",
+          "description": "Date the source/raw data was released.",
+          "confidence": 0.93
+        },
+        {
+          "name": "cdm_release_date",
+          "description": "Date this OMOP CDM instance was generated/released.",
+          "confidence": 0.93
+        },
+        {
+          "name": "cdm_version",
+          "description": "Version of the OMOP Common Data Model used (e.g., 'v5.3.1').",
+          "confidence": 0.97
+        },
+        {
+          "name": "vocabulary_version",
+          "description": "Version/release identifier of the OMOP standardized vocabularies used (e.g., 'v5.0 18-JAN-19').",
+          "confidence": 0.95
+        }
+      ]
+    },
+    "cohort_definition": {
+      "table_description": "An OMOP CDM metadata table that defines named cohorts: each row records the definition of a cohort (a set of subjects meeting specified criteria), including its name, description, the syntax/logic used to construct it, and what kind of entity the subjects are.",
+      "columns": [
+        {
+          "name": "cohort_definition_id",
+          "description": "Unique integer identifier for the cohort definition; serves as the primary key and is referenced by cohort membership tables.",
+          "confidence": 0.97
+        },
+        {
+          "name": "cohort_definition_name",
+          "description": "Short human-readable name/title of the cohort definition.",
+          "confidence": 0.96
+        },
+        {
+          "name": "cohort_definition_description",
+          "description": "Optional free-text description explaining the purpose or criteria of the cohort.",
+          "confidence": 0.94
+        },
+        {
+          "name": "definition_type_concept_id",
+          "description": "Concept ID (references the OMOP standardized vocabulary/CONCEPT table) indicating the type or method of the cohort definition, e.g. whether defined by SQL, ATLAS, or external tool.",
+          "confidence": 0.9
+        },
+        {
+          "name": "cohort_definition_syntax",
+          "description": "Free text holding the actual syntax/logic (e.g. SQL query or JSON definition) used to construct the cohort.",
+          "confidence": 0.92
+        },
+        {
+          "name": "subject_concept_id",
+          "description": "Concept ID (references CONCEPT) indicating the domain/type of the cohort subjects, e.g. whether subjects are persons, providers, or visits.",
+          "confidence": 0.9
+        },
+        {
+          "name": "cohort_initiation_date",
+          "description": "Optional date on which the cohort definition was created or first instantiated.",
+          "confidence": 0.85
+        }
+      ]
+    },
+    "concept": {
+      "table_description": "OMOP Common Data Model CONCEPT table: a standardized vocabulary dictionary where each row is a distinct clinical concept (drug, condition, measurement, procedure, etc.) drawn from source vocabularies like RxNorm, SNOMED, and LOINC.",
+      "columns": [
+        {
+          "name": "concept_id",
+          "description": "Unique integer surrogate key identifying each standardized concept (OMOP concept_id); primary key, 100% distinct.",
+          "confidence": 0.99
+        },
+        {
+          "name": "concept_name",
+          "description": "Human-readable name/label of the concept, e.g. 'celecoxib 200 MG Oral Capsule [Celebrex]' or 'Albumin serum/plasma'.",
+          "confidence": 0.98
+        },
+        {
+          "name": "domain_id",
+          "description": "Code for the OMOP domain the concept belongs to, e.g. Drug, Condition, Measurement, Procedure, Observation, Visit.",
+          "confidence": 0.97
+        },
+        {
+          "name": "vocabulary_id",
+          "description": "Identifier of the source vocabulary the concept originates from, e.g. RxNorm, SNOMED, LOINC, CVX, Visit.",
+          "confidence": 0.98
+        },
+        {
+          "name": "concept_class_id",
+          "description": "Code classifying the concept within its vocabulary, e.g. Clinical Finding, Ingredient, Clinical Drug, Procedure, Lab Test, 11-digit NDC.",
+          "confidence": 0.95
+        },
+        {
+          "name": "standard_concept",
+          "description": "Flag indicating whether the concept is a standard concept; 'S' for standard, null otherwise (no 'C'/classification values present in this sample).",
+          "confidence": 0.94
+        },
+        {
+          "name": "concept_code",
+          "description": "The original code for the concept in its source vocabulary (e.g. RxNorm code '310965', LOINC '1751-7', NDC '00025152531'); unique per row here.",
+          "confidence": 0.95
+        },
+        {
+          "name": "valid_start_date",
+          "description": "Date on which the concept became valid in the vocabulary; defaults to 1970-01-01 for long-standing concepts.",
+          "confidence": 0.93
+        },
+        {
+          "name": "valid_end_date",
+          "description": "Date on which the concept stops being valid; all rows set to the sentinel 2099-12-31 indicating still currently valid.",
+          "confidence": 0.93
+        },
+        {
+          "name": "invalid_reason",
+          "description": "Reason a concept was deprecated (e.g. 'D' deleted, 'U' updated); entirely null here since all concepts are valid.",
+          "confidence": 0.92
+        }
+      ]
+    },
+    "concept_ancestor": {
+      "table_description": "OMOP Common Data Model CONCEPT_ANCESTOR table: a precomputed hierarchical lookup that records every ancestor/descendant relationship between standardized concepts, capturing the transitive closure of the vocabulary hierarchy along with the distance between each pair.",
+      "columns": [
+        {
+          "name": "ancestor_concept_id",
+          "description": "Foreign key to CONCEPT.concept_id identifying the ancestor (more general/higher-level) standardized concept in the hierarchy.",
+          "confidence": 0.97
+        },
+        {
+          "name": "descendant_concept_id",
+          "description": "Foreign key to CONCEPT.concept_id identifying the descendant (more specific/lower-level) standardized concept subsumed under the ancestor.",
+          "confidence": 0.97
+        },
+        {
+          "name": "min_levels_of_separation",
+          "description": "Minimum number of hierarchy levels (shortest path of subsumption hops) between the ancestor and descendant concepts; 0 means the concept is its own ancestor.",
+          "confidence": 0.95
+        },
+        {
+          "name": "max_levels_of_separation",
+          "description": "Maximum number of hierarchy levels (longest path of subsumption hops) between the ancestor and descendant concepts.",
+          "confidence": 0.95
+        }
+      ]
+    },
+    "concept_class": {
+      "table_description": "OMOP CDM vocabulary reference table that defines concept classes — categories used to group standardized concepts within a vocabulary (e.g., 'Clinical Finding', 'Ingredient'). Currently empty (0 rows).",
+      "columns": [
+        {
+          "name": "concept_class_id",
+          "description": "Short string identifier/code for the concept class (primary key); a unique key referenced by CONCEPT.concept_class_id.",
+          "confidence": 0.95
+        },
+        {
+          "name": "concept_class_name",
+          "description": "Human-readable name/label describing the concept class.",
+          "confidence": 0.95
+        },
+        {
+          "name": "concept_class_concept_id",
+          "description": "Integer foreign key to the CONCEPT table identifying the concept that represents this concept class itself.",
+          "confidence": 0.9
+        }
+      ]
+    },
+    "concept_relationship": {
+      "table_description": "An OMOP CDM vocabulary table recording directed relationships between pairs of standardized concepts (e.g., \"Maps to\", \"Is a\", \"Subsumes\"), with validity dates for each relationship.",
+      "columns": [
+        {
+          "name": "concept_id_1",
+          "description": "Source concept identifier in the relationship; references a concept_id in the CONCEPT table.",
+          "confidence": 0.95
+        },
+        {
+          "name": "concept_id_2",
+          "description": "Target/destination concept identifier in the relationship; references a concept_id in the CONCEPT table.",
+          "confidence": 0.95
+        },
+        {
+          "name": "relationship_id",
+          "description": "Code/name of the relationship type linking the two concepts (e.g., 'Maps to', 'Mapped from', 'Is a', 'Subsumes'); references the RELATIONSHIP vocabulary.",
+          "confidence": 0.95
+        },
+        {
+          "name": "valid_start_date",
+          "description": "Date on which the relationship became valid.",
+          "confidence": 0.9
+        },
+        {
+          "name": "valid_end_date",
+          "description": "Date on which the relationship ceases to be valid; default 2099-12-31 indicates currently active.",
+          "confidence": 0.9
+        },
+        {
+          "name": "invalid_reason",
+          "description": "Reason the relationship is no longer valid (e.g., 'D' deleted, 'U' updated); NULL when the relationship is currently valid.",
+          "confidence": 0.9
+        }
+      ]
+    },
+    "concept_synonym": {
+      "table_description": "OMOP Common Data Model CONCEPT_SYNONYM table: each row records an alternative name (synonym) for a standardized clinical concept, allowing multiple textual representations per concept.",
+      "columns": [
+        {
+          "name": "concept_id",
+          "description": "Foreign key to concept.concept_id; identifies the standardized vocabulary concept that this synonym describes. Repeated values (distinct ratio 0.43) indicate a concept can have multiple synonyms.",
+          "confidence": 0.98
+        },
+        {
+          "name": "concept_synonym_name",
+          "description": "The alternative/synonym text for the concept (e.g. 'Sprain of ankle', 'Acute cholecystitis (disorder)'). Free-text string, unique per row.",
+          "confidence": 0.97
+        },
+        {
+          "name": "language_concept_id",
+          "description": "Concept ID (FK to concept) indicating the language of the synonym text. All rows use the single value 4180186, the OMOP concept for English.",
+          "confidence": 0.95
+        }
+      ]
+    },
+    "person": {
+      "table_description": "OMOP Common Data Model PERSON table: each row is a distinct individual patient, recording demographic attributes (gender, birth date, race, ethnicity) as both source values and standardized concept IDs. Here populated with 2,694 patients born 1909–1985.",
+      "columns": [
+        {
+          "name": "person_id",
+          "description": "Unique integer primary key identifying each person in the database.",
+          "confidence": 0.99
+        },
+        {
+          "name": "gender_concept_id",
+          "description": "Standardized OMOP concept ID for the person's gender (FK to concept.concept_id); observed values 8507=MALE, 8532=FEMALE.",
+          "confidence": 0.98
+        },
+        {
+          "name": "year_of_birth",
+          "description": "Year of birth as a 4-digit integer (range 1909–1985).",
+          "confidence": 0.99
+        },
+        {
+          "name": "month_of_birth",
+          "description": "Month of birth as an integer 1–12; nullable.",
+          "confidence": 0.98
+        },
+        {
+          "name": "day_of_birth",
+          "description": "Day of the month of birth as an integer 1–31; nullable.",
+          "confidence": 0.98
+        },
+        {
+          "name": "birth_datetime",
+          "description": "Full date/time of birth as a timestamp (time component always midnight); nullable.",
+          "confidence": 0.97
+        },
+        {
+          "name": "race_concept_id",
+          "description": "Standardized OMOP concept ID for race (FK to concept.concept_id); 0 indicates unmapped/no matching standard concept (e.g. 8527=White, 8516=Black/African American, 8515=Asian).",
+          "confidence": 0.95
+        },
+        {
+          "name": "ethnicity_concept_id",
+          "description": "Standardized OMOP concept ID for ethnicity (FK to concept.concept_id); 38003563=Hispanic or Latino, 0=Not Hispanic/unmapped.",
+          "confidence": 0.95
+        },
+        {
+          "name": "location_id",
+          "description": "FK to a location/address record for the person; entirely NULL in this dataset.",
+          "confidence": 0.8
+        },
+        {
+          "name": "provider_id",
+          "description": "FK to the person's primary care provider; entirely NULL in this dataset.",
+          "confidence": 0.8
+        },
+        {
+          "name": "care_site_id",
+          "description": "FK to the person's primary care site/facility; entirely NULL in this dataset.",
+          "confidence": 0.8
+        },
+        {
+          "name": "person_source_value",
+          "description": "Original source identifier for the person, stored as a UUID string; unique per person.",
+          "confidence": 0.95
+        },
+        {
+          "name": "gender_source_value",
+          "description": "Gender as recorded in the source data, single-character code 'M' or 'F'.",
+          "confidence": 0.97
+        },
+        {
+          "name": "gender_source_concept_id",
+          "description": "OMOP concept ID for the source gender code (FK to concept.concept_id); always 0 (unmapped) here.",
+          "confidence": 0.9
+        },
+        {
+          "name": "race_source_value",
+          "description": "Race as recorded in the source data, free-text lowercase labels (white, hispanic, black, asian, native).",
+          "confidence": 0.95
+        },
+        {
+          "name": "race_source_concept_id",
+          "description": "OMOP concept ID for the source race code (FK to concept.concept_id); always 0 (unmapped) here.",
+          "confidence": 0.9
+        },
+        {
+          "name": "ethnicity_source_value",
+          "description": "Ethnicity/nationality as recorded in source data, free-text lowercase labels (e.g. irish, italian, german, puerto_rican, west_indian).",
+          "confidence": 0.93
+        },
+        {
+          "name": "ethnicity_source_concept_id",
+          "description": "OMOP concept ID for the source ethnicity code (FK to concept.concept_id); always 0 (unmapped) here.",
+          "confidence": 0.9
+        }
+      ]
+    },
+    "condition_era": {
+      "table_description": "OMOP Common Data Model CONDITION_ERA table: each row is a continuous span (era) during which a patient is inferred to have a given clinical condition, aggregated from underlying condition occurrences. Contains 65,719 eras across 2,694 patients.",
+      "columns": [
+        {
+          "name": "condition_era_id",
+          "description": "Surrogate primary key uniquely identifying each condition era; integer, unique per row (distinct_ratio 1.0).",
+          "confidence": 0.99
+        },
+        {
+          "name": "person_id",
+          "description": "Foreign key to PERSON.person_id identifying the patient the condition era belongs to.",
+          "confidence": 0.99
+        },
+        {
+          "name": "condition_concept_id",
+          "description": "Foreign key to CONCEPT.concept_id holding a standardized condition concept (typically SNOMED-based) identifying the diagnosed condition; 0 denotes an unmapped/unknown concept.",
+          "confidence": 0.97
+        },
+        {
+          "name": "condition_era_start_date",
+          "description": "Start date of the condition era (earliest date the condition was observed in this span); ranges 1912–2019.",
+          "confidence": 0.97
+        },
+        {
+          "name": "condition_era_end_date",
+          "description": "End date of the condition era (latest date the condition persisted in this span); ranges 1912–2019.",
+          "confidence": 0.97
+        },
+        {
+          "name": "condition_occurrence_count",
+          "description": "Number of individual condition occurrences rolled up into this era; all sampled values are 1, indicating eras built from single occurrences here.",
+          "confidence": 0.9
+        }
+      ]
+    },
+    "condition_occurrence": {
+      "table_description": "OMOP Common Data Model CONDITION_OCCURRENCE table: each row records a single diagnosed condition/disease for a patient, with start/end dates, standardized condition concepts, and source codes. Here populated with 65,332 condition records linked to ~616 patients.",
+      "columns": [
+        {
+          "name": "condition_occurrence_id",
+          "description": "Surrogate primary key uniquely identifying each condition occurrence record.",
+          "confidence": 0.99
+        },
+        {
+          "name": "person_id",
+          "description": "Foreign key to person.person_id identifying the patient who has the condition.",
+          "confidence": 0.99
+        },
+        {
+          "name": "condition_concept_id",
+          "description": "Foreign key to concept.concept_id; standardized condition concept (typically a SNOMED-based OMOP diagnosis concept).",
+          "confidence": 0.97
+        },
+        {
+          "name": "condition_start_date",
+          "description": "Date the condition was first recorded or began (range 1917–2019).",
+          "confidence": 0.98
+        },
+        {
+          "name": "condition_start_datetime",
+          "description": "Timestamp of the condition start; mirrors condition_start_date with 00:00:00 time component.",
+          "confidence": 0.97
+        },
+        {
+          "name": "condition_end_date",
+          "description": "Date the condition resolved or ended; null (~14%) when ongoing or unknown.",
+          "confidence": 0.96
+        },
+        {
+          "name": "condition_end_datetime",
+          "description": "Timestamp of the condition end; mirrors condition_end_date, null when not applicable.",
+          "confidence": 0.96
+        },
+        {
+          "name": "condition_type_concept_id",
+          "description": "Concept ID indicating the provenance/type of the condition record; constant 32020 here (a single source type).",
+          "confidence": 0.9
+        },
+        {
+          "name": "condition_status_concept_id",
+          "description": "Concept ID for diagnosis status; all values 0 (unmapped/not specified) in this data.",
+          "confidence": 0.9
+        },
+        {
+          "name": "stop_reason",
+          "description": "Free-text reason the condition ended; entirely null in this dataset.",
+          "confidence": 0.85
+        },
+        {
+          "name": "provider_id",
+          "description": "Foreign key to the provider associated with the diagnosis; entirely null here.",
+          "confidence": 0.85
+        },
+        {
+          "name": "visit_occurrence_id",
+          "description": "Foreign key to the visit (visit_occurrence) during which the condition was recorded.",
+          "confidence": 0.92
+        },
+        {
+          "name": "visit_detail_id",
+          "description": "Foreign key to a finer-grained visit detail; all values 0 (not populated).",
+          "confidence": 0.85
+        },
+        {
+          "name": "condition_source_value",
+          "description": "Original source diagnosis code as recorded, e.g. SNOMED numeric codes or ICD-10 codes like 'K92.2'.",
+          "confidence": 0.93
+        },
+        {
+          "name": "condition_source_concept_id",
+          "description": "Foreign key to concept.concept_id representing the source code's concept; mirrors condition_concept_id values here.",
+          "confidence": 0.92
+        },
+        {
+          "name": "condition_status_source_value",
+          "description": "Original source value describing diagnosis status; entirely null in this dataset.",
+          "confidence": 0.85
+        }
+      ]
+    },
+    "cost": {
+      "table_description": "OMOP CDM COST table: records the financial cost, charges, and payment breakdowns associated with clinical events (e.g., drug exposures, procedures, visits). Currently empty (0 rows).",
+      "columns": [
+        {
+          "name": "cost_id",
+          "description": "Surrogate primary key uniquely identifying each cost record.",
+          "confidence": 0.97
+        },
+        {
+          "name": "cost_event_id",
+          "description": "Identifier of the clinical event the cost is attached to; references the record (e.g., drug_exposure_id, procedure_occurrence_id, visit_occurrence_id) in the domain given by cost_domain_id.",
+          "confidence": 0.93
+        },
+        {
+          "name": "cost_domain_id",
+          "description": "Domain string indicating which event table cost_event_id refers to (e.g., 'Drug', 'Procedure', 'Visit', 'Device').",
+          "confidence": 0.92
+        },
+        {
+          "name": "cost_type_concept_id",
+          "description": "OMOP concept ID for the type/provenance of the cost record (e.g., source of cost data).",
+          "confidence": 0.9
+        },
+        {
+          "name": "currency_concept_id",
+          "description": "OMOP concept ID identifying the currency in which the monetary amounts are expressed (e.g., USD, EUR).",
+          "confidence": 0.92
+        },
+        {
+          "name": "total_charge",
+          "description": "Total amount charged/billed by the provider for the event, in the given currency.",
+          "confidence": 0.9
+        },
+        {
+          "name": "total_cost",
+          "description": "Total cost incurred to produce the service for the event, in the given currency.",
+          "confidence": 0.9
+        },
+        {
+          "name": "total_paid",
+          "description": "Total amount actually paid for the event (payer plus patient), in the given currency.",
+          "confidence": 0.9
+        },
+        {
+          "name": "paid_by_payer",
+          "description": "Portion of the total paid amount covered by the payer/insurer.",
+          "confidence": 0.91
+        },
+        {
+          "name": "paid_by_patient",
+          "description": "Portion of the total paid amount paid out-of-pocket by the patient.",
+          "confidence": 0.91
+        },
+        {
+          "name": "paid_patient_copay",
+          "description": "Patient out-of-pocket amount attributed to copayment.",
+          "confidence": 0.9
+        },
+        {
+          "name": "paid_patient_coinsurance",
+          "description": "Patient out-of-pocket amount attributed to coinsurance.",
+          "confidence": 0.9
+        },
+        {
+          "name": "paid_patient_deductible",
+          "description": "Patient out-of-pocket amount applied to the deductible.",
+          "confidence": 0.9
+        },
+        {
+          "name": "paid_by_primary",
+          "description": "Amount paid by the primary payer when multiple payers are involved (coordination of benefits).",
+          "confidence": 0.85
+        },
+        {
+          "name": "paid_ingredient_cost",
+          "description": "For drug costs, the amount paid for the drug ingredient itself.",
+          "confidence": 0.88
+        },
+        {
+          "name": "paid_dispensing_fee",
+          "description": "For drug costs, the amount paid as the pharmacy dispensing fee.",
+          "confidence": 0.88
+        },
+        {
+          "name": "payer_plan_period_id",
+          "description": "Foreign key to the payer_plan_period table identifying the patient's insurance plan coverage period for this cost.",
+          "confidence": 0.9
+        },
+        {
+          "name": "amount_allowed",
+          "description": "Contractually allowed amount the payer agrees to reimburse for the event.",
+          "confidence": 0.87
+        },
+        {
+          "name": "revenue_code_concept_id",
+          "description": "OMOP concept ID for the revenue code categorizing the service line (institutional billing).",
+          "confidence": 0.88
+        },
+        {
+          "name": "revenue_code_source_value",
+          "description": "Source/original revenue code value as it appears in the raw billing data.",
+          "confidence": 0.9
+        },
+        {
+          "name": "drg_concept_id",
+          "description": "OMOP concept ID for the Diagnosis Related Group (DRG) associated with the cost/admission.",
+          "confidence": 0.88
+        },
+        {
+          "name": "drg_source_value",
+          "description": "Source/original DRG code value as it appears in the raw billing data.",
+          "confidence": 0.9
+        }
+      ]
+    },
+    "death": {
+      "table_description": "OMOP CDM DEATH table: records the date and cause of death for a person. One row per death event, linked to a person.",
+      "columns": [
+        {
+          "name": "person_id",
+          "description": "Foreign key to the PERSON table identifying the deceased individual.",
+          "confidence": 0.97
+        },
+        {
+          "name": "death_date",
+          "description": "Calendar date on which the person died.",
+          "confidence": 0.97
+        },
+        {
+          "name": "death_datetime",
+          "description": "Date and time of death (no timezone); optional, more precise than death_date.",
+          "confidence": 0.95
+        },
+        {
+          "name": "death_type_concept_id",
+          "description": "OMOP standard concept id describing the provenance/type of the death record (e.g., EHR, death registry, payer claim).",
+          "confidence": 0.9
+        },
+        {
+          "name": "cause_concept_id",
+          "description": "OMOP standard concept id for the cause of death (mapped SNOMED/condition concept).",
+          "confidence": 0.9
+        },
+        {
+          "name": "cause_source_value",
+          "description": "Source code string for the cause of death as recorded in the source system (e.g., ICD code).",
+          "confidence": 0.9
+        },
+        {
+          "name": "cause_source_concept_id",
+          "description": "OMOP concept id corresponding to the source-system cause-of-death code prior to standard mapping.",
+          "confidence": 0.88
+        }
+      ]
+    },
+    "device_exposure": {
+      "table_description": "OMOP CDM DEVICE_EXPOSURE table: records each instance of a patient's exposure to or use of a foreign physical object or instrument (e.g., implants, devices, supplies) during healthcare, including timing, source coding, and the associated visit/provider.",
+      "columns": [
+        {
+          "name": "device_exposure_id",
+          "description": "Surrogate primary key uniquely identifying each device exposure record.",
+          "confidence": 0.97
+        },
+        {
+          "name": "person_id",
+          "description": "Foreign key to the PERSON table identifying the patient exposed to the device.",
+          "confidence": 0.97
+        },
+        {
+          "name": "device_concept_id",
+          "description": "Standard OMOP concept ID identifying the type of device used/exposed.",
+          "confidence": 0.95
+        },
+        {
+          "name": "device_exposure_start_date",
+          "description": "Date the device exposure began.",
+          "confidence": 0.96
+        },
+        {
+          "name": "device_exposure_start_datetime",
+          "description": "Date and time the device exposure began.",
+          "confidence": 0.95
+        },
+        {
+          "name": "device_exposure_end_date",
+          "description": "Date the device exposure ended.",
+          "confidence": 0.94
+        },
+        {
+          "name": "device_exposure_end_datetime",
+          "description": "Date and time the device exposure ended.",
+          "confidence": 0.94
+        },
+        {
+          "name": "device_type_concept_id",
+          "description": "Standard OMOP concept ID indicating the provenance/type of the source record (e.g., EHR, claim) for the device exposure.",
+          "confidence": 0.92
+        },
+        {
+          "name": "unique_device_id",
+          "description": "Unique Device Identifier (UDI) string assigned to the specific physical device, when available.",
+          "confidence": 0.9
+        },
+        {
+          "name": "quantity",
+          "description": "Number of devices used/dispensed in this exposure.",
+          "confidence": 0.9
+        },
+        {
+          "name": "provider_id",
+          "description": "Foreign key to PROVIDER table for the clinician associated with the device exposure.",
+          "confidence": 0.93
+        },
+        {
+          "name": "visit_occurrence_id",
+          "description": "Foreign key to VISIT_OCCURRENCE table for the visit during which the device was used.",
+          "confidence": 0.94
+        },
+        {
+          "name": "visit_detail_id",
+          "description": "Foreign key to VISIT_DETAIL table for the visit detail during which the device was used.",
+          "confidence": 0.92
+        },
+        {
+          "name": "device_source_value",
+          "description": "Original source code/text for the device as represented in the source data, prior to mapping.",
+          "confidence": 0.93
+        },
+        {
+          "name": "device_source_concept_id",
+          "description": "OMOP concept ID representing the device code in the source vocabulary before mapping to a standard concept.",
+          "confidence": 0.92
+        }
+      ]
+    },
+    "domain": {
+      "table_description": "OMOP CDM vocabulary reference table enumerating the set of clinical data domains (e.g., Condition, Drug, Procedure, Measurement, Visit). Each row defines one domain used to classify standard concepts.",
+      "columns": [
+        {
+          "name": "domain_id",
+          "description": "Unique short textual key identifying the domain (e.g., 'Condition', 'Procedure', 'Drug/Obs', 'Modifier', 'Visit'). Primary key.",
+          "confidence": 0.97
+        },
+        {
+          "name": "domain_name",
+          "description": "Human-readable name/label of the domain, sometimes with a descriptive phrase (e.g., 'Measurement Value', 'Payer - institution administering healthcare transactions').",
+          "confidence": 0.95
+        },
+        {
+          "name": "domain_concept_id",
+          "description": "Foreign-key concept_id (into the CONCEPT table) that represents this domain as a standardized concept.",
+          "confidence": 0.9
+        }
+      ]
+    },
+    "dose_era": {
+      "table_description": "OMOP CDM DOSE_ERA table: each row represents a continuous span of time during which a person was exposed to a constant dose of a specific active ingredient. Derived (era) table aggregating drug exposures by ingredient and dose level.",
+      "columns": [
+        {
+          "name": "dose_era_id",
+          "description": "Surrogate primary key; unique identifier for each dose era record.",
+          "confidence": 0.97
+        },
+        {
+          "name": "person_id",
+          "description": "Identifier of the person this dose era belongs to; foreign key to the PERSON table.",
+          "confidence": 0.97
+        },
+        {
+          "name": "drug_concept_id",
+          "description": "OMOP standard concept id for the drug ingredient (RxNorm ingredient-level concept) the dose era applies to.",
+          "confidence": 0.95
+        },
+        {
+          "name": "unit_concept_id",
+          "description": "OMOP standard concept id for the unit of measure of the dose value (e.g., mg, mL).",
+          "confidence": 0.94
+        },
+        {
+          "name": "dose_value",
+          "description": "Numeric dose amount of the ingredient that was constant throughout the era, expressed in the unit given by unit_concept_id.",
+          "confidence": 0.92
+        },
+        {
+          "name": "dose_era_start_date",
+          "description": "Start date of the period of continuous exposure at this constant dose.",
+          "confidence": 0.95
+        },
+        {
+          "name": "dose_era_end_date",
+          "description": "End date of the period of continuous exposure at this constant dose.",
+          "confidence": 0.95
+        }
+      ]
+    },
+    "drug_era": {
+      "table_description": "OMOP Common Data Model DRUG_ERA table: each row is a continuous span (era) during which a patient is inferred to be exposed to a single standardized (RxNorm ingredient) drug, derived by aggregating individual drug exposures. Contains 52,508 eras for 2,694 patients.",
+      "columns": [
+        {
+          "name": "drug_era_id",
+          "description": "Surrogate primary key uniquely identifying each drug era record.",
+          "confidence": 0.99
+        },
+        {
+          "name": "person_id",
+          "description": "Foreign key to person.person_id; the patient this drug era belongs to.",
+          "confidence": 0.99
+        },
+        {
+          "name": "drug_concept_id",
+          "description": "Foreign key to concept.concept_id; the standardized drug concept (typically an RxNorm ingredient) the patient was exposed to during this era.",
+          "confidence": 0.97
+        },
+        {
+          "name": "drug_era_start_date",
+          "description": "Date the inferred continuous drug exposure era began (earliest exposure). Ranges 1921–2019.",
+          "confidence": 0.97
+        },
+        {
+          "name": "drug_era_end_date",
+          "description": "Date the inferred continuous drug exposure era ended (latest exposure plus persistence window).",
+          "confidence": 0.97
+        },
+        {
+          "name": "drug_exposure_count",
+          "description": "Count of individual drug exposure records aggregated into this era (observed values 1–4).",
+          "confidence": 0.93
+        },
+        {
+          "name": "gap_days",
+          "description": "Number of days within the era not covered by drug exposure (persistence gap). Values here span large positive and negative ranges, suggesting non-standard or miscomputed population of this OMOP field.",
+          "confidence": 0.7
+        }
+      ]
+    },
+    "drug_exposure": {
+      "table_description": "OMOP Common Data Model DRUG_EXPOSURE table: each row records a drug/medication administered, prescribed, or dispensed to a patient over a time interval, linking the patient, the standardized drug concept, and source codes. Here 67,707 exposures across 2,694 patients from 1913 to 2019.",
+      "columns": [
+        {
+          "name": "drug_exposure_id",
+          "description": "Surrogate primary key uniquely identifying each drug exposure record.",
+          "confidence": 1.0
+        },
+        {
+          "name": "person_id",
+          "description": "Foreign key to person.person_id; the patient who received the drug.",
+          "confidence": 1.0
+        },
+        {
+          "name": "drug_concept_id",
+          "description": "Foreign key to concept.concept_id; standardized drug concept (RxNorm) for the administered/dispensed drug.",
+          "confidence": 0.97
+        },
+        {
+          "name": "drug_exposure_start_date",
+          "description": "Date the drug exposure began.",
+          "confidence": 0.99
+        },
+        {
+          "name": "drug_exposure_start_datetime",
+          "description": "Timestamp the drug exposure began; times are all 00:00:00, mirroring start_date.",
+          "confidence": 0.98
+        },
+        {
+          "name": "drug_exposure_end_date",
+          "description": "Date the drug exposure ended.",
+          "confidence": 0.99
+        },
+        {
+          "name": "drug_exposure_end_datetime",
+          "description": "Timestamp the drug exposure ended; times all 00:00:00, mirroring end_date.",
+          "confidence": 0.98
+        },
+        {
+          "name": "verbatim_end_date",
+          "description": "End date as originally recorded in the source data, before any ETL derivation; null in ~10% of rows.",
+          "confidence": 0.9
+        },
+        {
+          "name": "drug_type_concept_id",
+          "description": "Foreign key to concept.concept_id; standardized type/provenance of the drug record (e.g., prescription written vs. dispensed). Only two values present: 38000177 and 581452.",
+          "confidence": 0.93
+        },
+        {
+          "name": "stop_reason",
+          "description": "Free-text reason the drug was stopped; entirely null in this dataset.",
+          "confidence": 0.95
+        },
+        {
+          "name": "refills",
+          "description": "Number of refills authorized/recorded; constant 0 here.",
+          "confidence": 0.9
+        },
+        {
+          "name": "quantity",
+          "description": "Quantity of drug dispensed/administered; constant 0 here.",
+          "confidence": 0.9
+        },
+        {
+          "name": "days_supply",
+          "description": "Number of days the dispensed supply is expected to last; ranges 0 to 6794.",
+          "confidence": 0.93
+        },
+        {
+          "name": "sig",
+          "description": "Free-text dosing instructions (signa); entirely null in this dataset.",
+          "confidence": 0.95
+        },
+        {
+          "name": "route_concept_id",
+          "description": "Foreign key to concept.concept_id; standardized route of administration. Constant 0 (unmapped/no value) here.",
+          "confidence": 0.92
+        },
+        {
+          "name": "lot_number",
+          "description": "Manufacturer lot number of the drug product; constant '0' (unpopulated) here.",
+          "confidence": 0.9
+        },
+        {
+          "name": "provider_id",
+          "description": "Foreign key to a provider; the prescriber/administering clinician. Constant 0 (unpopulated) here.",
+          "confidence": 0.88
+        },
+        {
+          "name": "visit_occurrence_id",
+          "description": "Foreign key to a visit_occurrence; the encounter during which the drug was given. Nearly all populated.",
+          "confidence": 0.93
+        },
+        {
+          "name": "visit_detail_id",
+          "description": "Foreign key to a visit_detail (sub-visit); constant 0 (unpopulated) here.",
+          "confidence": 0.9
+        },
+        {
+          "name": "drug_source_value",
+          "description": "Original drug code as recorded in the source system (e.g., NDC or RxNorm code strings).",
+          "confidence": 0.9
+        },
+        {
+          "name": "drug_source_concept_id",
+          "description": "Foreign key to concept.concept_id; the source-vocabulary drug concept before standardization. Values match drug_concept_id here.",
+          "confidence": 0.92
+        },
+        {
+          "name": "route_source_value",
+          "description": "Original route-of-administration text from the source; entirely null here.",
+          "confidence": 0.93
+        },
+        {
+          "name": "dose_unit_source_value",
+          "description": "Original dose unit text from the source; entirely null here.",
+          "confidence": 0.93
+        }
+      ]
+    },
+    "drug_strength": {
+      "table_description": "OMOP CDM vocabulary table that records the strength of each drug product in terms of its active ingredients, expressed either as an absolute amount or as a concentration (numerator/denominator). Each row links a drug concept to one of its ingredient concepts with the associated quantity and units.",
+      "columns": [
+        {
+          "name": "drug_concept_id",
+          "description": "Reference to the CONCEPT id of the drug product (e.g. branded/clinical drug) whose strength is described. FK to CONCEPT.concept_id.",
+          "confidence": 0.97
+        },
+        {
+          "name": "ingredient_concept_id",
+          "description": "Reference to the CONCEPT id of the active ingredient contained in the drug. FK to CONCEPT.concept_id.",
+          "confidence": 0.97
+        },
+        {
+          "name": "amount_value",
+          "description": "Numeric absolute quantity of the ingredient in the drug product (used for solid/discrete forms such as tablets), measured in amount_unit_concept_id units.",
+          "confidence": 0.93
+        },
+        {
+          "name": "amount_unit_concept_id",
+          "description": "Reference to the CONCEPT id giving the unit of measure for amount_value (e.g. mg). FK to CONCEPT.concept_id.",
+          "confidence": 0.93
+        },
+        {
+          "name": "numerator_value",
+          "description": "Numeric numerator quantity of the ingredient when strength is expressed as a concentration/ratio (e.g. amount of active ingredient per volume).",
+          "confidence": 0.92
+        },
+        {
+          "name": "numerator_unit_concept_id",
+          "description": "Reference to the CONCEPT id giving the unit of measure for numerator_value (e.g. mg). FK to CONCEPT.concept_id.",
+          "confidence": 0.92
+        },
+        {
+          "name": "denominator_value",
+          "description": "Numeric denominator quantity defining the concentration's reference quantity (e.g. per mL of solution).",
+          "confidence": 0.92
+        },
+        {
+          "name": "denominator_unit_concept_id",
+          "description": "Reference to the CONCEPT id giving the unit of measure for denominator_value (e.g. mL). FK to CONCEPT.concept_id.",
+          "confidence": 0.92
+        },
+        {
+          "name": "box_size",
+          "description": "Number of units (e.g. tablets, vials) contained in the marketed box/package of the drug product.",
+          "confidence": 0.85
+        },
+        {
+          "name": "valid_start_date",
+          "description": "Date on which this drug-strength record became valid in the vocabulary.",
+          "confidence": 0.95
+        },
+        {
+          "name": "valid_end_date",
+          "description": "Date on which this drug-strength record ceased to be valid (often a far-future sentinel for active records).",
+          "confidence": 0.95
+        },
+        {
+          "name": "invalid_reason",
+          "description": "Code indicating why the record is no longer valid (e.g. 'D' deprecated, 'U' updated); NULL when currently valid.",
+          "confidence": 0.9
+        }
+      ]
+    },
+    "fact_relationship": {
+      "table_description": "OMOP CDM FACT_RELATIONSHIP table: records directional relationships between two records (facts) that may belong to any domain (e.g., a person related to a care site, or one measurement related to another). Each row links fact 1 to fact 2 with a typed relationship. Table is currently empty.",
+      "columns": [
+        {
+          "name": "domain_concept_id_1",
+          "description": "Concept ID identifying the OMOP domain of the first fact (fact_id_1), indicating which table/entity that fact comes from (e.g., Person, Visit, Measurement). References the standardized vocabulary CONCEPT table.",
+          "confidence": 0.95
+        },
+        {
+          "name": "fact_id_1",
+          "description": "Identifier (primary key value) of the first record within the table/domain given by domain_concept_id_1.",
+          "confidence": 0.95
+        },
+        {
+          "name": "domain_concept_id_2",
+          "description": "Concept ID identifying the OMOP domain of the second fact (fact_id_2), indicating which table/entity that fact comes from. References the standardized vocabulary CONCEPT table.",
+          "confidence": 0.95
+        },
+        {
+          "name": "fact_id_2",
+          "description": "Identifier (primary key value) of the second record within the table/domain given by domain_concept_id_2.",
+          "confidence": 0.95
+        },
+        {
+          "name": "relationship_concept_id",
+          "description": "Concept ID specifying the type/nature of the relationship from fact 1 to fact 2 (e.g., parent-child, before-after). References the standardized vocabulary CONCEPT table.",
+          "confidence": 0.95
+        }
+      ]
+    },
+    "location": {
+      "table_description": "OMOP CDM LOCATION table: stores physical address/geographic location records (street, city, state, zip, county) referenced by persons, care sites, and providers. Each row is a unique location identified by location_id.",
+      "columns": [
+        {
+          "name": "location_id",
+          "description": "Surrogate primary key uniquely identifying each location record; integer, non-nullable.",
+          "confidence": 0.97
+        },
+        {
+          "name": "address_1",
+          "description": "First line of the street address (e.g., house number and street name).",
+          "confidence": 0.95
+        },
+        {
+          "name": "address_2",
+          "description": "Second line of the street address (e.g., apartment, suite, or unit number).",
+          "confidence": 0.95
+        },
+        {
+          "name": "city",
+          "description": "City or town name of the location.",
+          "confidence": 0.96
+        },
+        {
+          "name": "state",
+          "description": "State or province, typically a 2-character US state abbreviation.",
+          "confidence": 0.94
+        },
+        {
+          "name": "zip",
+          "description": "Postal/ZIP code of the location, stored as text to preserve leading zeros.",
+          "confidence": 0.95
+        },
+        {
+          "name": "county",
+          "description": "County name associated with the location.",
+          "confidence": 0.93
+        },
+        {
+          "name": "location_source_value",
+          "description": "Original/source-system representation of the location as it appeared before standardization.",
+          "confidence": 0.9
+        }
+      ]
+    },
+    "measurement": {
+      "columns": [
+        {
+          "name": "measurement_id",
+          "description": "Surrogate primary key uniquely identifying each measurement record (distinct_ratio 1.0).",
+          "confidence": 0.99
+        },
+        {
+          "name": "person_id",
+          "description": "Foreign key to person.person_id; the patient the measurement was recorded for.",
+          "confidence": 0.99
+        },
+        {
+          "name": "measurement_concept_id",
+          "description": "Standardized OMOP concept ID (FK to concept) identifying the measurement/observable, mapped from LOINC/SNOMED source codes (only ~38% distinct, i.e. ~1670 distinct concepts).",
+          "confidence": 0.95
+        },
+        {
+          "name": "measurement_date",
+          "description": "Calendar date the measurement was taken, ranging 1912-2019.",
+          "confidence": 0.97
+        },
+        {
+          "name": "measurement_datetime",
+          "description": "Timestamp of the measurement; identical to measurement_date with 00:00:00 time component (times not captured).",
+          "confidence": 0.95
+        },
+        {
+          "name": "measurement_time",
+          "description": "Time-of-day field for the measurement, here populated with the date string instead of a time; effectively redundant with measurement_date.",
+          "confidence": 0.8
+        },
+        {
+          "name": "measurement_type_concept_id",
+          "description": "OMOP concept ID for the provenance/type of the measurement record; constant 5001 (a single source type) across all rows.",
+          "confidence": 0.9
+        },
+        {
+          "name": "operator_concept_id",
+          "description": "OMOP concept ID for a comparison operator (e.g. =, <, >) applied to the value; populated only with 0 (no value), so unused.",
+          "confidence": 0.9
+        },
+        {
+          "name": "value_as_number",
+          "description": "Numeric result value of the measurement; entirely null in this dataset.",
+          "confidence": 0.95
+        },
+        {
+          "name": "value_as_concept_id",
+          "description": "OMOP concept ID for a categorical/coded result value; only 0 (no value) here, so unused.",
+          "confidence": 0.9
+        },
+        {
+          "name": "unit_concept_id",
+          "description": "OMOP concept ID for the measurement unit; only 0 (no value) here, so unused.",
+          "confidence": 0.9
+        },
+        {
+          "name": "range_low",
+          "description": "Lower bound of the normal reference range for the measurement; entirely null here.",
+          "confidence": 0.93
+        },
+        {
+          "name": "range_high",
+          "description": "Upper bound of the normal reference range for the measurement; entirely null here.",
+          "confidence": 0.93
+        },
+        {
+          "name": "provider_id",
+          "description": "FK to the provider responsible for the measurement; only 0 (no value) here, so unused.",
+          "confidence": 0.85
+        },
+        {
+          "name": "visit_occurrence_id",
+          "description": "FK to the visit/encounter during which the measurement occurred (visit_occurrence table); largely distinct per row.",
+          "confidence": 0.9
+        },
+        {
+          "name": "visit_detail_id",
+          "description": "FK to a finer-grained visit detail record; only 0 (no value) here, so unused.",
+          "confidence": 0.85
+        },
+        {
+          "name": "measurement_source_value",
+          "description": "Original source code for the measurement as recorded in source data, e.g. SNOMED codes (117015009) or LOINC codes (8331-1).",
+          "confidence": 0.92
+        },
+        {
+          "name": "measurement_source_concept_id",
+          "description": "OMOP concept ID corresponding to the source code; matches measurement_concept_id values, FK to concept.",
+          "confidence": 0.9
+        },
+        {
+          "name": "unit_source_value",
+          "description": "Original source text for the measurement unit; entirely null here.",
+          "confidence": 0.93
+        },
+        {
+          "name": "value_source_value",
+          "description": "Original source text for the result value; entirely null here.",
+          "confidence": 0.93
+        }
+      ],
+      "table_description": "OMOP Common Data Model MEASUREMENT table: each row is a clinical measurement, lab test, or vital sign recorded for a patient during a visit, identified by standardized and source concept codes (LOINC/SNOMED). In this dataset value/unit/range fields are unpopulated, so only the measurement type, date, patient, and visit are captured."
+    },
+    "metadata": {
+      "table_description": "OMOP CDM METADATA table: stores metadata about the CDM instance/dataset (e.g., CDM version, ETL details, vocabulary versions), with each row recording a named metadata item and its value. Empty in this profile (0 rows).",
+      "columns": [
+        {
+          "name": "metadata_concept_id",
+          "description": "Foreign key to the CONCEPT table identifying the type of metadata being recorded (the standardized concept for the metadata item).",
+          "confidence": 0.85
+        },
+        {
+          "name": "metadata_type_concept_id",
+          "description": "Foreign key to the CONCEPT table indicating the category/type of the metadata record (e.g., source vs. standardized metadata).",
+          "confidence": 0.85
+        },
+        {
+          "name": "name",
+          "description": "Free-text name/label of the metadata item being recorded.",
+          "confidence": 0.9
+        },
+        {
+          "name": "value_as_string",
+          "description": "The metadata value when represented as a text string.",
+          "confidence": 0.9
+        },
+        {
+          "name": "value_as_concept_id",
+          "description": "The metadata value when represented as a standardized concept; foreign key to the CONCEPT table.",
+          "confidence": 0.85
+        },
+        {
+          "name": "metadata_date",
+          "description": "Date associated with the metadata record (e.g., when the metadata was recorded or applies).",
+          "confidence": 0.85
+        },
+        {
+          "name": "metadata_datetime",
+          "description": "Timestamp associated with the metadata record (date and time without time zone).",
+          "confidence": 0.85
+        }
+      ]
+    },
+    "note": {
+      "table_description": "OMOP CDM NOTE table: stores unstructured clinical notes (free-text documents) recorded for patients, along with metadata about each note's type, class, encoding, language, and the encounter/provider it is associated with.",
+      "columns": [
+        {
+          "name": "note_id",
+          "description": "Surrogate primary key uniquely identifying each clinical note record.",
+          "confidence": 0.97
+        },
+        {
+          "name": "person_id",
+          "description": "Foreign key to the PERSON table; the patient the note pertains to.",
+          "confidence": 0.96
+        },
+        {
+          "name": "note_date",
+          "description": "Calendar date the note was recorded/entered.",
+          "confidence": 0.95
+        },
+        {
+          "name": "note_datetime",
+          "description": "Date and time the note was recorded; finer-grained version of note_date.",
+          "confidence": 0.93
+        },
+        {
+          "name": "note_type_concept_id",
+          "description": "Concept ID (Type Concept vocabulary) indicating the provenance/source type of the note, e.g. EHR record vs derived.",
+          "confidence": 0.9
+        },
+        {
+          "name": "note_class_concept_id",
+          "description": "Concept ID (typically LOINC document ontology) classifying the kind/category of the clinical document.",
+          "confidence": 0.9
+        },
+        {
+          "name": "note_title",
+          "description": "Free-text title or heading of the note.",
+          "confidence": 0.92
+        },
+        {
+          "name": "note_text",
+          "description": "The full unstructured free-text content of the clinical note.",
+          "confidence": 0.95
+        },
+        {
+          "name": "encoding_concept_id",
+          "description": "Concept ID identifying the character/text encoding used for the note content (e.g. UTF-8).",
+          "confidence": 0.88
+        },
+        {
+          "name": "language_concept_id",
+          "description": "Concept ID identifying the natural language the note is written in.",
+          "confidence": 0.9
+        },
+        {
+          "name": "provider_id",
+          "description": "Foreign key to the PROVIDER table; the clinician who authored or is responsible for the note.",
+          "confidence": 0.9
+        },
+        {
+          "name": "visit_occurrence_id",
+          "description": "Foreign key to the VISIT_OCCURRENCE table; the patient visit/encounter during which the note was created.",
+          "confidence": 0.9
+        },
+        {
+          "name": "visit_detail_id",
+          "description": "Foreign key to the VISIT_DETAIL table; a more granular sub-visit context for the note.",
+          "confidence": 0.88
+        },
+        {
+          "name": "note_source_value",
+          "description": "Original source-system code or value for the note's type/identifier prior to mapping.",
+          "confidence": 0.85
+        }
+      ]
+    },
+    "note_nlp": {
+      "table_description": "OMOP CDM NOTE_NLP table: stores structured terms and concepts extracted from clinical notes by a natural language processing (NLP) system. Each row represents one NLP-derived term/annotation found within a note.",
+      "columns": [
+        {
+          "name": "note_nlp_id",
+          "description": "Surrogate primary key uniquely identifying each NLP annotation/extracted term record.",
+          "confidence": 0.97
+        },
+        {
+          "name": "note_id",
+          "description": "Foreign key to the NOTE table identifying the source clinical note this NLP term was extracted from.",
+          "confidence": 0.96
+        },
+        {
+          "name": "section_concept_id",
+          "description": "Concept ID (OMOP vocabulary) identifying the note section (e.g., Past Medical History) where the term was found.",
+          "confidence": 0.9
+        },
+        {
+          "name": "snippet",
+          "description": "Short text excerpt from the note containing the extracted lexical variant, providing surrounding context.",
+          "confidence": 0.92
+        },
+        {
+          "name": "offset",
+          "description": "Character offset/position of the term within the note text (stored as string).",
+          "confidence": 0.9
+        },
+        {
+          "name": "lexical_variant",
+          "description": "The raw text string of the term as it actually appeared in the note.",
+          "confidence": 0.95
+        },
+        {
+          "name": "note_nlp_concept_id",
+          "description": "Standard OMOP concept ID that the extracted term was mapped to by the NLP system.",
+          "confidence": 0.93
+        },
+        {
+          "name": "note_nlp_source_concept_id",
+          "description": "Source/original concept ID assigned by the NLP system before mapping to a standard concept.",
+          "confidence": 0.9
+        },
+        {
+          "name": "nlp_system",
+          "description": "Name and version of the NLP system/tool that produced the annotation.",
+          "confidence": 0.93
+        },
+        {
+          "name": "nlp_date",
+          "description": "Date the NLP processing of the note was performed.",
+          "confidence": 0.94
+        },
+        {
+          "name": "nlp_datetime",
+          "description": "Timestamp (date and time) the NLP processing was performed.",
+          "confidence": 0.93
+        },
+        {
+          "name": "term_exists",
+          "description": "NLP-derived flag indicating whether the condition/term is asserted to exist (e.g., negation/assertion status).",
+          "confidence": 0.88
+        },
+        {
+          "name": "term_temporal",
+          "description": "NLP-derived temporal context of the term (e.g., present, history, past).",
+          "confidence": 0.85
+        },
+        {
+          "name": "term_modifiers",
+          "description": "NLP-derived modifiers/attributes of the term, often as delimited key-value pairs (e.g., severity, subject).",
+          "confidence": 0.85
+        }
+      ]
+    },
+    "observation": {
+      "table_description": "OMOP Common Data Model OBSERVATION table: each row records a clinical observation/fact about a patient (e.g., symptoms, social or historical facts) captured during a visit, identified by standardized SNOMED-based concept IDs. Here populated with 1,477 observations for patients across visits from 1910 to 2019.",
+      "columns": [
+        {
+          "name": "observation_id",
+          "description": "Surrogate primary key; unique integer identifier for each observation record.",
+          "confidence": 0.99
+        },
+        {
+          "name": "person_id",
+          "description": "Foreign key to person.person_id identifying the patient the observation pertains to.",
+          "confidence": 0.98
+        },
+        {
+          "name": "observation_concept_id",
+          "description": "Foreign key to concept.concept_id giving the standardized concept for what was observed (OMOP/SNOMED clinical concept).",
+          "confidence": 0.97
+        },
+        {
+          "name": "observation_date",
+          "description": "Calendar date on which the observation was recorded.",
+          "confidence": 0.97
+        },
+        {
+          "name": "observation_datetime",
+          "description": "Timestamp of the observation; mirrors observation_date with time set to midnight (no time-of-day precision).",
+          "confidence": 0.95
+        },
+        {
+          "name": "observation_type_concept_id",
+          "description": "Concept ID indicating the provenance/type of the observation record; only two values (38000276, 38000280) present.",
+          "confidence": 0.9
+        },
+        {
+          "name": "value_as_number",
+          "description": "Numeric result value of the observation; entirely null in this dataset.",
+          "confidence": 0.85
+        },
+        {
+          "name": "value_as_string",
+          "description": "Textual result value of the observation; entirely null in this dataset.",
+          "confidence": 0.85
+        },
+        {
+          "name": "value_as_concept_id",
+          "description": "Foreign key to concept.concept_id for a result expressed as a coded concept; populated only with 0 (no value).",
+          "confidence": 0.85
+        },
+        {
+          "name": "qualifier_concept_id",
+          "description": "Foreign key to concept.concept_id qualifying the observation; populated only with 0 (no value).",
+          "confidence": 0.85
+        },
+        {
+          "name": "unit_concept_id",
+          "description": "Foreign key to concept.concept_id for the unit of value_as_number; populated only with 0 (no value).",
+          "confidence": 0.85
+        },
+        {
+          "name": "provider_id",
+          "description": "Identifier of the provider associated with the observation; populated only with 0 (unknown).",
+          "confidence": 0.8
+        },
+        {
+          "name": "visit_occurrence_id",
+          "description": "Identifier of the visit (encounter) during which the observation was made; foreign key to visit_occurrence.",
+          "confidence": 0.9
+        },
+        {
+          "name": "visit_detail_id",
+          "description": "Identifier of the visit detail subrecord; populated only with 0 (unused).",
+          "confidence": 0.8
+        },
+        {
+          "name": "observation_source_value",
+          "description": "Original source code for the observation, here SNOMED CT numeric codes (e.g., 428251008).",
+          "confidence": 0.9
+        },
+        {
+          "name": "observation_source_concept_id",
+          "description": "Foreign key to concept.concept_id for the source concept; matches observation_concept_id, indicating the source code mapped directly to a standard concept.",
+          "confidence": 0.9
+        },
+        {
+          "name": "unit_source_value",
+          "description": "Original source text for the unit of measure; entirely null in this dataset.",
+          "confidence": 0.85
+        },
+        {
+          "name": "qualifier_source_value",
+          "description": "Original source text for the observation qualifier; entirely null in this dataset.",
+          "confidence": 0.85
+        }
+      ]
+    },
+    "observation_period": {
+      "table_description": "OMOP Common Data Model OBSERVATION_PERIOD table: each row defines a continuous span of time during which a person is observed in the source data, with a start and end date. Contains 5,343 periods linked to patients in the PERSON table.",
+      "columns": [
+        {
+          "name": "observation_period_id",
+          "description": "Surrogate primary key uniquely identifying each observation period record.",
+          "confidence": 0.99
+        },
+        {
+          "name": "person_id",
+          "description": "Foreign key to person.person_id identifying the patient this observation period belongs to.",
+          "confidence": 0.98
+        },
+        {
+          "name": "observation_period_start_date",
+          "description": "Date on which the patient's observation period begins (earliest date of observation in source data); ranges 1909-07-07 to 2019-05-27.",
+          "confidence": 0.98
+        },
+        {
+          "name": "observation_period_end_date",
+          "description": "Date on which the patient's observation period ends (latest date of observation); ranges 1925-09-07 to 2019-07-01.",
+          "confidence": 0.98
+        },
+        {
+          "name": "period_type_concept_id",
+          "description": "OMOP standard concept ID describing the provenance/type of the observation period; constant value 44814724 ('Period covering healthcare encounters' / EHR-derived period type).",
+          "confidence": 0.9
+        }
+      ]
+    },
+    "payer_plan_period": {
+      "table_description": "OMOP CDM PAYER_PLAN_PERIOD table: each row records a continuous span of time during which a person was covered by a specific health insurance payer and plan (and optionally a sponsor/family). The table is currently empty.",
+      "columns": [
+        {
+          "name": "payer_plan_period_id",
+          "description": "Surrogate primary key uniquely identifying each payer/plan coverage period record.",
+          "confidence": 0.97
+        },
+        {
+          "name": "person_id",
+          "description": "Foreign key to the PERSON table; identifies the individual covered by this payer plan period.",
+          "confidence": 0.96
+        },
+        {
+          "name": "payer_plan_period_start_date",
+          "description": "Start date of the coverage period under this payer/plan.",
+          "confidence": 0.96
+        },
+        {
+          "name": "payer_plan_period_end_date",
+          "description": "End date of the coverage period under this payer/plan.",
+          "confidence": 0.96
+        },
+        {
+          "name": "payer_concept_id",
+          "description": "Standard OMOP concept ID identifying the insurance payer (e.g., Medicare, Medicaid, private insurer).",
+          "confidence": 0.9
+        },
+        {
+          "name": "payer_source_value",
+          "description": "Verbatim payer name/code as recorded in the source data.",
+          "confidence": 0.92
+        },
+        {
+          "name": "payer_source_concept_id",
+          "description": "OMOP concept ID representing the payer code in its original source vocabulary.",
+          "confidence": 0.88
+        },
+        {
+          "name": "plan_concept_id",
+          "description": "Standard OMOP concept ID identifying the specific insurance plan or benefit type under the payer.",
+          "confidence": 0.89
+        },
+        {
+          "name": "plan_source_value",
+          "description": "Verbatim insurance plan name/code as recorded in the source data.",
+          "confidence": 0.91
+        },
+        {
+          "name": "plan_source_concept_id",
+          "description": "OMOP concept ID representing the plan code in its original source vocabulary.",
+          "confidence": 0.87
+        },
+        {
+          "name": "sponsor_concept_id",
+          "description": "Standard OMOP concept ID identifying the plan sponsor (e.g., employer or organization funding the plan).",
+          "confidence": 0.85
+        },
+        {
+          "name": "sponsor_source_value",
+          "description": "Verbatim sponsor name/code as recorded in the source data.",
+          "confidence": 0.88
+        },
+        {
+          "name": "sponsor_source_concept_id",
+          "description": "OMOP concept ID representing the sponsor code in its original source vocabulary.",
+          "confidence": 0.84
+        },
+        {
+          "name": "family_source_value",
+          "description": "Source value identifying the family or subscriber/dependent grouping for the insurance coverage.",
+          "confidence": 0.85
+        },
+        {
+          "name": "stop_reason_concept_id",
+          "description": "Standard OMOP concept ID describing the reason the coverage period ended (e.g., plan changed, lost eligibility).",
+          "confidence": 0.86
+        },
+        {
+          "name": "stop_reason_source_value",
+          "description": "Verbatim reason-for-termination code/text from the source data.",
+          "confidence": 0.88
+        },
+        {
+          "name": "stop_reason_source_concept_id",
+          "description": "OMOP concept ID representing the stop-reason code in its original source vocabulary.",
+          "confidence": 0.84
+        }
+      ]
+    },
+    "procedure_occurrence": {
+      "table_description": "OMOP Common Data Model PROCEDURE_OCCURRENCE table: each row records a single procedure performed on a patient on a given date, with standardized and source procedure codes. Here populated with 37,409 procedures for ~2,041 patients spanning 1917–2019.",
+      "columns": [
+        {
+          "name": "procedure_occurrence_id",
+          "description": "Surrogate primary key uniquely identifying each procedure occurrence record.",
+          "confidence": 0.99
+        },
+        {
+          "name": "person_id",
+          "description": "Foreign key to person.person_id; the patient who underwent the procedure.",
+          "confidence": 0.99
+        },
+        {
+          "name": "procedure_concept_id",
+          "description": "Standardized procedure concept ID (FK to concept.concept_id), typically a SNOMED/standard vocabulary procedure concept. Values mirror procedure_source_concept_id here.",
+          "confidence": 0.96
+        },
+        {
+          "name": "procedure_date",
+          "description": "Calendar date the procedure was performed.",
+          "confidence": 0.98
+        },
+        {
+          "name": "procedure_datetime",
+          "description": "Date and time the procedure was performed; times are all midnight, so effectively equal to procedure_date.",
+          "confidence": 0.95
+        },
+        {
+          "name": "procedure_type_concept_id",
+          "description": "Concept ID describing the provenance/source type of the procedure record (FK to concept). Constant 38000275, indicating a single source type for all rows.",
+          "confidence": 0.9
+        },
+        {
+          "name": "modifier_concept_id",
+          "description": "Standardized concept ID for a procedure modifier (FK to concept). Always 0, i.e. no modifier recorded.",
+          "confidence": 0.92
+        },
+        {
+          "name": "quantity",
+          "description": "Quantity/number of times the procedure was performed; entirely null (not populated).",
+          "confidence": 0.9
+        },
+        {
+          "name": "provider_id",
+          "description": "Reference to the provider who performed the procedure; entirely null (not populated).",
+          "confidence": 0.9
+        },
+        {
+          "name": "visit_occurrence_id",
+          "description": "Foreign key to the visit_occurrence during which the procedure took place.",
+          "confidence": 0.93
+        },
+        {
+          "name": "visit_detail_id",
+          "description": "Reference to a finer-grained visit_detail record; always 0, i.e. not populated.",
+          "confidence": 0.9
+        },
+        {
+          "name": "procedure_source_value",
+          "description": "Original source procedure code as text, appears to be SNOMED CT codes (e.g. 180256009).",
+          "confidence": 0.93
+        },
+        {
+          "name": "procedure_source_concept_id",
+          "description": "Concept ID mapped from the source procedure code (FK to concept); matches procedure_concept_id in this data.",
+          "confidence": 0.94
+        },
+        {
+          "name": "modifier_source_value",
+          "description": "Original source value for the procedure modifier; entirely null (not populated).",
+          "confidence": 0.9
+        }
+      ]
+    },
+    "provider": {
+      "table_description": "OMOP CDM PROVIDER table: records individual healthcare providers (clinicians) who deliver care, including their identifiers, specialty, and demographics. Each row is one provider.",
+      "columns": [
+        {
+          "name": "provider_id",
+          "description": "Surrogate primary key uniquely identifying each provider.",
+          "confidence": 0.97
+        },
+        {
+          "name": "provider_name",
+          "description": "Free-text name of the provider (clinician or person).",
+          "confidence": 0.95
+        },
+        {
+          "name": "npi",
+          "description": "National Provider Identifier (US 10-digit NPI), stored as text.",
+          "confidence": 0.95
+        },
+        {
+          "name": "dea",
+          "description": "Drug Enforcement Administration (DEA) registration number authorizing controlled-substance prescribing, stored as text.",
+          "confidence": 0.93
+        },
+        {
+          "name": "specialty_concept_id",
+          "description": "Foreign key to the standardized OMOP concept representing the provider's specialty.",
+          "confidence": 0.93
+        },
+        {
+          "name": "care_site_id",
+          "description": "Foreign key to the CARE_SITE table identifying the provider's primary care site/location.",
+          "confidence": 0.93
+        },
+        {
+          "name": "year_of_birth",
+          "description": "Provider's year of birth (4-digit year).",
+          "confidence": 0.92
+        },
+        {
+          "name": "gender_concept_id",
+          "description": "Foreign key to the standardized OMOP concept representing the provider's gender.",
+          "confidence": 0.92
+        },
+        {
+          "name": "provider_source_value",
+          "description": "Original provider identifier/value from the source system.",
+          "confidence": 0.9
+        },
+        {
+          "name": "specialty_source_value",
+          "description": "Provider specialty as represented in the source data (raw text/code).",
+          "confidence": 0.9
+        },
+        {
+          "name": "specialty_source_concept_id",
+          "description": "Foreign key to the OMOP concept representing the source specialty code before standardization.",
+          "confidence": 0.88
+        },
+        {
+          "name": "gender_source_value",
+          "description": "Provider gender as represented in the source data (raw value).",
+          "confidence": 0.9
+        },
+        {
+          "name": "gender_source_concept_id",
+          "description": "Foreign key to the OMOP concept representing the source gender code before standardization.",
+          "confidence": 0.88
+        }
+      ]
+    },
+    "relationship": {
+      "table_description": "OMOP CDM vocabulary metadata table defining the types of relationships that can exist between concepts (e.g., SNOMED \"Has component\", \"Direct procedure site of\"). Each row is a distinct relationship type, including hierarchy flags and a pointer to its inverse relationship.",
+      "columns": [
+        {
+          "name": "relationship_id",
+          "description": "Primary key: short unique text identifier/label for the relationship type (e.g., 'Has kind', 'Has component', 'Source - RxNorm eq'). Distinct per row.",
+          "confidence": 0.97
+        },
+        {
+          "name": "relationship_name",
+          "description": "Full human-readable name of the relationship, typically with source vocabulary in parentheses (e.g., 'Direct procedure site of (SNOMED)', 'VA Class to NDFRT equivalent (NDF-RT)').",
+          "confidence": 0.97
+        },
+        {
+          "name": "is_hierarchical",
+          "description": "Boolean flag (stored as '0'/'1' text) indicating whether the relationship defines a hierarchy between concepts.",
+          "confidence": 0.95
+        },
+        {
+          "name": "defines_ancestry",
+          "description": "Boolean flag (stored as '0'/'1' text) indicating whether the hierarchical relationship contributes to the concept_ancestor (ancestor/descendant) computation.",
+          "confidence": 0.93
+        },
+        {
+          "name": "reverse_relationship_id",
+          "description": "Foreign key to relationship_id of the inverse relationship (e.g., 'Has kind' paired with its reverse). References this same table's relationship_id.",
+          "confidence": 0.92
+        },
+        {
+          "name": "relationship_concept_id",
+          "description": "Integer concept_id (foreign key to the CONCEPT table) that represents this relationship as a standardized concept.",
+          "confidence": 0.93
+        }
+      ]
+    },
+    "source_to_concept_map": {
+      "table_description": "OMOP CDM vocabulary table mapping source codes (from local/source vocabularies) to standard concepts. Each row defines a mapping from a source_code to a target_concept_id, with validity dates.",
+      "columns": [
+        {
+          "name": "source_code",
+          "description": "The source vocabulary code being mapped (string, as it appears in the source data).",
+          "confidence": 0.95
+        },
+        {
+          "name": "source_concept_id",
+          "description": "Concept id representing the source code; references CONCEPT.concept_id, or 0 if the source code is not represented as a concept.",
+          "confidence": 0.9
+        },
+        {
+          "name": "source_vocabulary_id",
+          "description": "Identifier of the vocabulary that the source_code belongs to; references VOCABULARY.vocabulary_id.",
+          "confidence": 0.93
+        },
+        {
+          "name": "source_code_description",
+          "description": "Optional free-text description of the source code.",
+          "confidence": 0.92
+        },
+        {
+          "name": "target_concept_id",
+          "description": "Concept id the source code maps to; references CONCEPT.concept_id (the standard/target concept).",
+          "confidence": 0.95
+        },
+        {
+          "name": "target_vocabulary_id",
+          "description": "Identifier of the vocabulary of the target concept; references VOCABULARY.vocabulary_id.",
+          "confidence": 0.93
+        },
+        {
+          "name": "valid_start_date",
+          "description": "Date when this source-to-target mapping became valid.",
+          "confidence": 0.95
+        },
+        {
+          "name": "valid_end_date",
+          "description": "Date when this mapping ceased to be valid (often a far-future placeholder if still valid).",
+          "confidence": 0.95
+        },
+        {
+          "name": "invalid_reason",
+          "description": "Reason a mapping is no longer valid: typically 'D' (deleted) or 'U' (updated); NULL if currently valid.",
+          "confidence": 0.9
+        }
+      ]
+    },
+    "specimen": {
+      "table_description": "OMOP CDM SPECIMEN table: records biological specimens (e.g., blood, tissue, swab samples) collected from a person, including the specimen type, collection date, quantity, and anatomical/disease context.",
+      "columns": [
+        {
+          "name": "specimen_id",
+          "description": "Surrogate primary key uniquely identifying each specimen record.",
+          "confidence": 0.97
+        },
+        {
+          "name": "person_id",
+          "description": "Foreign key to the PERSON table; the patient from whom the specimen was collected.",
+          "confidence": 0.96
+        },
+        {
+          "name": "specimen_concept_id",
+          "description": "Standard concept ID (OMOP vocabulary) identifying the type of specimen collected, e.g., serum, urine, tissue.",
+          "confidence": 0.94
+        },
+        {
+          "name": "specimen_type_concept_id",
+          "description": "Concept ID indicating the provenance/source type of the specimen record (how the specimen data was captured).",
+          "confidence": 0.9
+        },
+        {
+          "name": "specimen_date",
+          "description": "Date the specimen was collected.",
+          "confidence": 0.95
+        },
+        {
+          "name": "specimen_datetime",
+          "description": "Date and time the specimen was collected (timestamp without time zone).",
+          "confidence": 0.93
+        },
+        {
+          "name": "quantity",
+          "description": "Numeric amount/volume of the specimen collected, expressed in the unit given by unit_concept_id.",
+          "confidence": 0.9
+        },
+        {
+          "name": "unit_concept_id",
+          "description": "Standard concept ID for the unit of measure of the specimen quantity (e.g., mL, g).",
+          "confidence": 0.91
+        },
+        {
+          "name": "anatomic_site_concept_id",
+          "description": "Standard concept ID for the anatomical location from which the specimen was obtained.",
+          "confidence": 0.92
+        },
+        {
+          "name": "disease_status_concept_id",
+          "description": "Standard concept ID describing the disease status of the tissue at collection (e.g., tumor, normal).",
+          "confidence": 0.9
+        },
+        {
+          "name": "specimen_source_id",
+          "description": "Source system identifier for the specimen record as found in the originating data.",
+          "confidence": 0.85
+        },
+        {
+          "name": "specimen_source_value",
+          "description": "Original (unmapped) source code or text describing the specimen type.",
+          "confidence": 0.9
+        },
+        {
+          "name": "unit_source_value",
+          "description": "Original source code or text for the quantity's unit of measure.",
+          "confidence": 0.9
+        },
+        {
+          "name": "anatomic_site_source_value",
+          "description": "Original source code or text for the anatomical site of collection.",
+          "confidence": 0.9
+        },
+        {
+          "name": "disease_status_source_value",
+          "description": "Original source code or text for the disease status of the specimen.",
+          "confidence": 0.9
+        }
+      ]
+    },
+    "visit_detail": {
+      "table_description": "OMOP CDM visit_detail table: records detailed sub-visits or movements within a higher-level visit occurrence (e.g., transfers between wards/units), one row per visit detail event for a person.",
+      "columns": [
+        {
+          "name": "visit_detail_id",
+          "description": "Surrogate primary key uniquely identifying each visit detail record.",
+          "confidence": 0.97
+        },
+        {
+          "name": "person_id",
+          "description": "Foreign key to the person (patient) the visit detail belongs to.",
+          "confidence": 0.97
+        },
+        {
+          "name": "visit_detail_concept_id",
+          "description": "Standard OMOP concept ID classifying the type/setting of the visit detail (e.g., inpatient ward, ICU, outpatient).",
+          "confidence": 0.93
+        },
+        {
+          "name": "visit_detail_start_date",
+          "description": "Date the visit detail (sub-visit) began.",
+          "confidence": 0.96
+        },
+        {
+          "name": "visit_detail_start_datetime",
+          "description": "Timestamp the visit detail began; nullable, more precise than start_date.",
+          "confidence": 0.95
+        },
+        {
+          "name": "visit_detail_end_date",
+          "description": "Date the visit detail (sub-visit) ended.",
+          "confidence": 0.96
+        },
+        {
+          "name": "visit_detail_end_datetime",
+          "description": "Timestamp the visit detail ended; nullable.",
+          "confidence": 0.95
+        },
+        {
+          "name": "visit_detail_type_concept_id",
+          "description": "OMOP concept ID indicating the provenance/source type of the visit detail record (e.g., derived from EHR, claim).",
+          "confidence": 0.9
+        },
+        {
+          "name": "provider_id",
+          "description": "Foreign key to the provider associated with this visit detail; nullable.",
+          "confidence": 0.92
+        },
+        {
+          "name": "care_site_id",
+          "description": "Foreign key to the care site (location/unit) where the visit detail occurred; nullable.",
+          "confidence": 0.92
+        },
+        {
+          "name": "visit_detail_source_value",
+          "description": "Original source-system text/code for the visit detail before mapping to a standard concept.",
+          "confidence": 0.9
+        },
+        {
+          "name": "visit_detail_source_concept_id",
+          "description": "Source (non-standard) OMOP concept ID for the visit detail as represented in the source vocabulary.",
+          "confidence": 0.9
+        },
+        {
+          "name": "admitting_source_value",
+          "description": "Original source text/code describing where the patient was admitted from.",
+          "confidence": 0.88
+        },
+        {
+          "name": "admitting_source_concept_id",
+          "description": "OMOP concept ID for the admitting source/origin of the patient.",
+          "confidence": 0.88
+        },
+        {
+          "name": "discharge_to_source_value",
+          "description": "Original source text/code describing the discharge destination.",
+          "confidence": 0.88
+        },
+        {
+          "name": "discharge_to_concept_id",
+          "description": "OMOP concept ID for the discharge destination/disposition.",
+          "confidence": 0.88
+        },
+        {
+          "name": "preceding_visit_detail_id",
+          "description": "Self-referencing foreign key to the immediately preceding visit_detail record for the same person.",
+          "confidence": 0.9
+        },
+        {
+          "name": "visit_detail_parent_id",
+          "description": "Self-referencing foreign key to the parent visit_detail record, representing hierarchical nesting of sub-visits.",
+          "confidence": 0.88
+        },
+        {
+          "name": "visit_occurrence_id",
+          "description": "Foreign key to the visit_occurrence this detail belongs to (the encompassing higher-level visit).",
+          "confidence": 0.95
+        }
+      ]
+    },
+    "visit_occurrence": {
+      "table_description": "OMOP Common Data Model VISIT_OCCURRENCE table: each row is a single patient encounter/visit (here all coded as inpatient hospitalizations), with start/end dates, the visiting patient, and source/standardized concept references. Populated with 1,037 visits spanning 1923–2019.",
+      "columns": [
+        {
+          "name": "visit_occurrence_id",
+          "description": "Surrogate primary key uniquely identifying each visit/encounter record.",
+          "confidence": 0.99
+        },
+        {
+          "name": "person_id",
+          "description": "Foreign key to person.person_id identifying the patient for this visit; 0.861 distinct ratio indicates some patients have multiple visits.",
+          "confidence": 0.98
+        },
+        {
+          "name": "visit_concept_id",
+          "description": "Standardized concept ID (FK to concept) classifying the visit type; constant value 9201 = 'Inpatient Visit'.",
+          "confidence": 0.97
+        },
+        {
+          "name": "visit_start_date",
+          "description": "Calendar date the visit began.",
+          "confidence": 0.98
+        },
+        {
+          "name": "visit_start_datetime",
+          "description": "Timestamp the visit began; time component is always 00:00:00, so effectively redundant with visit_start_date.",
+          "confidence": 0.96
+        },
+        {
+          "name": "visit_end_date",
+          "description": "Calendar date the visit ended/patient was discharged.",
+          "confidence": 0.98
+        },
+        {
+          "name": "visit_end_datetime",
+          "description": "Timestamp the visit ended; time component is always 00:00:00, mirroring visit_end_date.",
+          "confidence": 0.96
+        },
+        {
+          "name": "visit_type_concept_id",
+          "description": "Standardized concept ID indicating the provenance/type of the visit record; constant 44818517 ('Visit derived from encounter on claim' / similar EHR-derived source).",
+          "confidence": 0.9
+        },
+        {
+          "name": "provider_id",
+          "description": "Intended FK to the provider responsible for the visit; entirely NULL in this dataset.",
+          "confidence": 0.85
+        },
+        {
+          "name": "care_site_id",
+          "description": "Intended FK to the care site/facility where the visit occurred; entirely NULL in this dataset.",
+          "confidence": 0.85
+        },
+        {
+          "name": "visit_source_value",
+          "description": "Source system identifier for the visit, here a UUID string from the originating EHR/dataset.",
+          "confidence": 0.93
+        },
+        {
+          "name": "visit_source_concept_id",
+          "description": "Standardized concept ID for the source visit code (FK to concept); always 0, meaning unmapped/none.",
+          "confidence": 0.9
+        },
+        {
+          "name": "admitting_source_concept_id",
+          "description": "Standardized concept ID for the admitting source/origin of admission (FK to concept); always 0 (unmapped).",
+          "confidence": 0.9
+        },
+        {
+          "name": "admitting_source_value",
+          "description": "Source text describing where the patient was admitted from; entirely NULL here.",
+          "confidence": 0.88
+        },
+        {
+          "name": "discharge_to_concept_id",
+          "description": "Standardized concept ID for discharge disposition/destination (FK to concept); always 0 (unmapped).",
+          "confidence": 0.9
+        },
+        {
+          "name": "discharge_to_source_value",
+          "description": "Source text describing the patient's discharge destination; entirely NULL here.",
+          "confidence": 0.88
+        },
+        {
+          "name": "preceding_visit_occurrence_id",
+          "description": "Self-referencing reference to the patient's immediately prior visit_occurrence_id, linking sequential visits.",
+          "confidence": 0.9
+        }
+      ]
+    },
+    "vocabulary": {
+      "table_description": "OMOP CDM VOCABULARY reference table: each row defines a controlled medical vocabulary/terminology (e.g., RxNorm, NDC, ICD9CM, UCUM) used as the source of concepts in the standardized vocabularies.",
+      "columns": [
+        {
+          "name": "vocabulary_id",
+          "description": "Short unique identifier/abbreviation for the vocabulary (e.g., 'UCUM', 'NFC', 'Cost'). Primary key.",
+          "confidence": 0.97
+        },
+        {
+          "name": "vocabulary_name",
+          "description": "Full descriptive name of the vocabulary, e.g., 'National Drug Code (FDA and manufacturers)', 'WHO Anatomic Therapeutic Chemical Classification'.",
+          "confidence": 0.97
+        },
+        {
+          "name": "vocabulary_reference",
+          "description": "Source/reference for the vocabulary: a URL, owning organization, or origin note (e.g., 'OMOP generated', NLM/RxNorm URLs, 'IMS proprietary').",
+          "confidence": 0.93
+        },
+        {
+          "name": "vocabulary_version",
+          "description": "Free-text version/release identifier of the vocabulary as loaded (e.g., 'RXNORM 2018-08-12', 'ICD9CM v32 master descriptions'). Nullable (~33% null).",
+          "confidence": 0.93
+        },
+        {
+          "name": "vocabulary_concept_id",
+          "description": "Foreign key to the CONCEPT table identifying the concept that represents this vocabulary itself; integer OMOP concept_id.",
+          "confidence": 0.9
+        }
+      ]
+    }
+  },
+  "usage": {
+    "input_tokens": 81625,
+    "output_tokens": 29993
+  }
+}
