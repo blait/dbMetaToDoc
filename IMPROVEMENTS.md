@@ -1,7 +1,9 @@
 # 정확도 향상 방안 (DBAutoDoc 논문 대조) — 전 영역
 
-논문 *DBAutoDoc* (arXiv:2603.23050, Nagarajan & Altman, 2026) 본문을 우리 구현과 대조해 도출.
-FK뿐 아니라 **PK · 테이블/컬럼/DB description · confidence 신뢰성 · 평가 · 운영**까지 포함한다.
+논문 *DBAutoDoc* (arXiv:2603.23050, Nagarajan & Altman, 2026) **및 그 오픈소스 구현**
+(`github.com/MemberJunction/MJ`, `packages/DBAutoDoc/`, **MIT**)을 우리 구현과 대조해 도출.
+FK뿐 아니라 **PK · 테이블/컬럼/DB description · confidence 신뢰성 · 평가 · 운영**까지 포함하며,
+저장소에서 차용 가능한 전체 메커니즘은 **G절** 참조.
 
 우리 PoC 실측(`out/score.json`, `score_details.json` 기준):
 - FK: precision 0.951 / **recall 0.248** / F1 0.394 (정답 157개 중 39개)
@@ -117,16 +119,74 @@ backpropagation(C1) + sanity 3종(아래). **개선**: 최소 `backpropagation` 
 컨텍스트가 됨. 즉 description 품질↑ = text2sql 정확도↑. (원 계획의 Property Graph/Neptune + text2sql
 단계로 자연 확장.)
 
+## G. 차용 가능한 전체 메커니즘 (출처: MemberJunction/MJ, **MIT 라이선스**)
+
+DBAutoDoc은 실재하는 오픈소스다 — `github.com/MemberJunction/MJ`, `packages/DBAutoDoc/`.
+**라이선스 MIT** → 코드·프롬프트를 합법적으로 차용 가능(출처 표기 권장). SQL Server/PostgreSQL/MySQL
+지원으로 우리 다중 DBMS 방향과 일치. 저장소에는 **프롬프트 18개 전문 + 설계문서 + 가드레일 문서 +
+run-analysis**가 공개돼 있다. 앞 A~F가 이 중 일부였고, 아래는 **저장소 ARCHITECTURE.md/GUARDRAILS.md/
+README.md에서 확인한 전체 메커니즘**이다(★ = 앞 절에 없던 것).
+
+출처 파일:
+- `packages/DBAutoDoc/docs/ARCHITECTURE.md` (메커니즘 68종)
+- `packages/DBAutoDoc/docs/GUARDRAILS*.md` (자원 가드레일 16종)
+- `packages/DBAutoDoc/prompts/*.md` (실제 프롬프트 18개: table-analysis, backpropagation,
+  fk-evaluation, fk-pruning-{holistic,table}, pk-pruning-{holistic,table}, convergence-check,
+  semantic-comparison, {dependency-level,schema,cross-schema}-sanity-check, query-{planning,fix,
+  refinement}, single-query-generation 등)
+- `packages/DBAutoDoc/plans/completed/{deterministic-fk-gates,enum-detection,entity-naming-normalization}.md`
+
+### G-a. PK/FK (앞 A·B 보강)
+- ★**PK 위치 휴리스틱 H9–H12** (컬럼 순서·이름패턴으로 PK 우선순위)
+- ★**복합키 탐지** (단일로 unique 안 되면 다컬럼 조합 검사) — 우리 B2와 동일, 저장소에 구현 존재
+- ★**fan-out confidence 패널티** (한 키가 너무 많은 테이블을 참조하면 신뢰도↓)
+- ★**2-pass LLM pruning** (1패스 통계 후보 → 2패스 LLM 검증) + **0.8 초과 후보만 LLM에 올림**
+  → 정확도↑와 LLM 비용↓ 동시 달성. (우리 A1의 구체적 형태)
+- ★**FK를 table 관점 + holistic 관점 2가지로** 평가 (`fk-pruning-table` vs `-holistic`)
+
+### G-b. 설명 정제·수렴 (앞 C 보강)
+- ★**backpropagation 엔진 + 20% 변화 임계 트리거 + 깊이 제한** (역전파를 언제/얼마나 깊이 할지 정량화)
+- ★**수렴 탐지 세트**: stability window, material-change 정량화, iteration capping, 최소 iteration 보장
+- ★**semantic-comparison**: 새 설명이 실질변화인지 표현변화인지 LLM으로 판정(수렴 신호)
+
+### G-c. 품질·검증 (앞 C5 보강)
+- ★**제약 만족 검증**: 설명이 탐지된 PK/FK 제약과 모순 없는지
+- ★**완전성 검증**: 모든 테이블·컬럼·관계가 문서화됐는지
+
+### G-d. confidence (앞 C2 보강)
+- PK 임계 0.7 / FK 0.6 (우리와 동일), ★**LLM 검증 escalation 임계 0.8**,
+  ★**통계+의미 confidence 합성**(compound) — 우리 "과신" 문제를 합성식으로 완화.
+
+### G-e. ★자원 가드레일 (우리에게 전무 — 제품화 필수)
+run/phase/iteration별 **토큰·비용·시간 하드리밋** + 80% 경고 임계 + 프롬프트별 token truncation +
+초과 시 즉시 중단 + 감사기록(`guardrailsEnforced`). 스캔/추론 전에 **예상 비용**을 보여주고 폭주를 막음.
+
+### G-f. ★상태·재개 (우리에게 전무)
+**phase별 상태 체크포인트 저장 → 중단 후 재개**, iteration 히스토리 보존. 수백 DB 대량 처리 시 필수.
+
+### G-g. ★Ground Truth System (우리 ai_text/current_text와 같은 개념, 더 정교)
+사람이 확정한 설명을 **덮어쓰기 금지 앵커**로 두고 이후 추론의 불변 컨텍스트로 사용
+→ 우리 메타스토어의 `current_text`(승인본)를 재추론 프롬프트에 앵커로 주입(C·E4와 연결).
+
+### G-h. ★enum 탐지 + 명명 정규화 (설계문서로 공개)
+- **enum-detection**: low-cardinality 컬럼을 enum 후보로 보고 top_values로 의미 해석(코드값 의미, C3 보강)
+- **entity-naming-normalization**: 컬럼 설명을 "비즈니스 중심 간결형"으로 재작성 + 자동 concept 태깅
+
+> 주의: 위 메커니즘 목록은 저장소 docs(ARCHITECTURE/GUARDRAILS/README)를 WebFetch로 읽어 정리.
+> 실제 코드 동작은 차용 구현 시 해당 소스를 직접 보고 확인한다. MIT라 차용은 자유이나 **출처 표기**.
+
 ## 우선순위 (효과/비용)
+0. **(신규) 자원 가드레일 + phase 재개** (G-e/G-f) — 정확도 아닌 **제품화 필수**. 비용 폭주·중단복구 대비.
 1. **빈 테이블 PK/FK 이름 기반 보강** (A2+B1) — 가장 싸고 recall에 즉효. 미검출의 직접 원인 해결.
 2. **선언된 PK/FK 활용** (B3) — 실고객 DB에서 거의 무료 정확도.
-3. **confidence 보정** (C2) — 싸고, 검수 triage 신뢰성 회복(제품 핵심).
-4. **게이트 G1–G8 완성 + 임계 완화** (A3) — precision 지키며 recall 여유.
-5. **sanity-check 자기검증 루프** (C5) — description hallucination 방어. 싼 편(검증 호출).
-6. **통계↔LLM 양방향 FK** (A1) — 논문 핵심, 가장 큰 향상. LLM 비용.
-7. **반복 정제 역전파** (C1) + **다단계 템플릿** (C4) + **코드값 매핑 주입** (C3) — 설명 품질. 비용 큼.
-8. **평가 통일/분리** (D), **운영** (E) — 병행.
-9. **text2sql** (F) — 별도 단계(원 로드맵의 후속). description 품질이 선행 조건.
+3. **confidence 보정 + 통계·의미 합성** (C2/G-d) — 싸고, 검수 triage 신뢰성 회복(제품 핵심).
+4. **2-pass LLM pruning(0.8 escalation)** (A1/G-a) — 정확도↑ + LLM 비용↓ 동시. 양방향 FK의 구체형.
+5. **fan-out 패널티 + 복합키 + 위치휴리스틱** (G-a/B2) — PK/FK 정확도.
+6. **sanity-check 자기검증 + 제약/완전성 검증** (C5/G-c) — hallucination·누락 방어.
+7. **반복정제 backprop(20% 임계·깊이제한) + 수렴세트** (C1/G-b) — 설명 품질. 비용 큼.
+8. **Ground Truth 앵커 + enum/명명정규화 + 코드값 매핑** (G-g/G-h/C3) — 설명 품질·고객 적합성.
+9. **평가 통일/분리** (D), **운영(증분·마스킹·학습루프)** (E) — 병행.
+10. **text2sql** (F/K) — 별도 단계(원 로드맵 후속). description 품질이 선행 조건.
 
 ## 검증 방법
 - 데이터 **꽉 찬** 대상 DB로 재측정해 빈 테이블 영향(A2/B1) 분리 확인.
@@ -135,10 +195,12 @@ backpropagation(C1) + sanity 3종(아래). **개선**: 최소 `backpropagation` 
 - confidence 보정(C2) 후 "빈 테이블 컬럼 평균 confidence"가 실제로 내려가는지 확인.
 
 ## 주의 (정직성)
-- 논문 abstract·본문·Table 9는 **WebFetch로** 확인했으나, arXiv ID가 최신(2026-03)이라 **1차 출처
-  재확인은 여전히 권장**. 우리 구현 가치는 논문 인용과 무관하게 **자체 정답지(OMOP) 채점으로 입증**됨.
-- **템플릿 개수 불일치**: 논문 본문 "thirteen templates" ↔ Table 9 실제 12개 나열. 논문 자체의
-  오타/누락으로 보이며, 위 C4의 12개 목록은 Table 9 기준(WebFetch 추출)이다.
-- 논문이 **공개하지 않은 것**: description confidence 공식, sanity 6규칙의 구체 내용, 값분포 프롬프트
-  표현법 → 이 영역(C2, C5 일부)은 **우리가 직접 설계**해야 하며 논문으로 검증 불가.
-- 위 개선은 "논문을 힌트로 한 설계"이며, 채택 시 각 항목을 우리 데이터로 재측정해 효과를 확인한다.
+- **DBAutoDoc은 실재 오픈소스로 확인됨**: `github.com/MemberJunction/MJ`의 `packages/DBAutoDoc/`,
+  **MIT 라이선스**, 프롬프트 18개·설계문서·가드레일 공개. (앞서 "arXiv ID 최신이라 환각 우려"라 했던
+  것은 저장소 실재 확인으로 **해소**.) 단 논문 본문 ↔ 코드의 세부 차이는 차용 시 소스로 대조.
+- **템플릿 개수**: 논문 본문 "thirteen templates" ↔ 논문 Table 9 12개 ↔ 실제 저장소 prompts/ **18개**.
+  C4 목록은 논문 Table 9 기준, G절은 저장소 실제 파일 기준.
+- 메커니즘 목록(G)은 저장소 docs를 **WebFetch로** 읽어 정리 — 실제 코드 동작은 차용 구현 시 직접 확인.
+- 차용은 MIT라 자유이나 **출처 표기**(MemberJunction/MJ, MIT)를 README/코드에 남긴다.
+- 우리 구현 가치는 차용과 무관하게 **자체 정답지(OMOP) 채점으로 입증**됨. 각 개선은 채택 시
+  우리 데이터로 재측정해 효과를 확인한다.
