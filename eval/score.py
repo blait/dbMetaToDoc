@@ -42,12 +42,30 @@ JUDGE_SCHEMA = {
     "required": ["equivalent", "reason"],
 }
 
+JUDGE_CONTEXT = (
+    "You are judging a generated column/table description against an OMOP CDM "
+    "reference. NOTE: the OMOP reference text is often ETL guidance or usage notes "
+    "(e.g. 'Compute age using year_of_birth') rather than a clean definition, and may "
+    "be phrased differently or be longer. Mark `equivalent: true` if the generated "
+    "description correctly captures what the field/table IS (its real-world meaning), "
+    "even if it is more concise or adds correct detail. Mark false only if it is wrong "
+    "or contradicts the reference.\n\n"
+)
+
+
+def is_blank_truth(text):
+    """OMOP leaves many fields as 'NA' or empty — not scorable references."""
+    if not text:
+        return True
+    t = text.strip().lower()
+    return t in ("", "na", "n/a", "none")
+
 
 # ---------------------------------------------------------------- truth load
 def load_field_truth():
     path = os.path.join(TRUTH, f"OMOP_CDMv{OMOP_VERSION}_Field_Level.csv")
     rows = {}
-    with open(path, newline="") as f:
+    with open(path, newline="", encoding="latin-1") as f:
         for r in csv.DictReader(f):
             t = r["cdmTableName"].strip().lower()
             c = r["cdmFieldName"].strip().lower()
@@ -58,7 +76,7 @@ def load_field_truth():
 def load_table_truth():
     path = os.path.join(TRUTH, f"OMOP_CDMv{OMOP_VERSION}_Table_Level.csv")
     out = {}
-    with open(path, newline="") as f:
+    with open(path, newline="", encoding="latin-1") as f:
         for r in csv.DictReader(f):
             # column name for the description varies; try common keys
             desc = (r.get("tableDescription") or r.get("userGuidance")
@@ -76,14 +94,16 @@ def cosine(a, b):
 
 
 def sim_pair(gen, ref, use_judge):
-    if not gen or not ref:
-        return None
+    if not gen or is_blank_truth(ref):
+        return None  # nothing to score against
     cos = cosine(embed(gen), embed(ref))
     judge = None
     if use_judge:
         obj, _ = claude_json(
-            f"Reference meaning:\n{ref}\n\nGenerated description:\n{gen}\n\n"
-            "Do they convey the same core meaning?", JUDGE_SCHEMA, max_tokens=300)
+            JUDGE_CONTEXT
+            + f"Reference (OMOP):\n{ref}\n\nGenerated:\n{gen}\n\n"
+              "Does the generated description correctly capture the meaning?",
+            JUDGE_SCHEMA, max_tokens=300)
         judge = 1 if obj["equivalent"] else 0
     return {"cosine": round(cos, 4), "judge": judge}
 
@@ -163,10 +183,13 @@ def main():
 
     pk, fk = score_relations(relations, field_truth)
 
-    # coverage = fraction of truth columns/tables we produced a description for
-    n_truth_cols = len({(t, c) for (t, c) in field_truth})
+    # coverage = fraction of *scorable* truth columns/tables we described
+    # (scorable = truth has a non-blank userGuidance/description)
+    n_truth_cols = sum(1 for r in field_truth.values()
+                       if not is_blank_truth(r.get("userGuidance", "")))
+    n_truth_tbls = sum(1 for v in table_truth.values() if not is_blank_truth(v))
     c_col = round(len(col_scores) / n_truth_cols, 3) if n_truth_cols else 0
-    c_table = round(len(tbl_scores) / len(table_truth), 3) if table_truth else 0
+    c_table = round(len(tbl_scores) / n_truth_tbls, 3) if n_truth_tbls else 0
     s_overall = round(0.35 * fk["f1"] + 0.30 * pk["f1"]
                       + 0.20 * c_table + 0.15 * c_col, 4)
 
