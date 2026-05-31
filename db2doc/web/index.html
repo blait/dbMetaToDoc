@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>db2doc — Schema Documentation Studio</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#171d26; --panel2:#1d2530; --line:#2a3441;
+    --txt:#e6edf3; --mut:#8b98a8; --acc:#4c9aff; --acc2:#3fb950;
+    --warn:#d29922; --bad:#f85149; --chip:#243042;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       background:var(--bg);color:var(--txt)}
+  a{color:var(--acc);text-decoration:none}
+  .top{display:flex;align-items:center;gap:18px;padding:0 18px;height:52px;
+       background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  .brand{font-weight:700;letter-spacing:.3px} .brand b{color:var(--acc)}
+  .nav{display:flex;gap:4px} .sel{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .nav button{background:none;border:0;color:var(--mut);padding:8px 12px;border-radius:7px;cursor:pointer;font-size:13px}
+  .nav button.on{background:var(--panel2);color:var(--txt)}
+  .nav .badge{background:var(--acc);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:6px}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px 18px 60px}
+  h1{font-size:20px;margin:0 0 4px} .sub{color:var(--mut);margin:0 0 18px;font-size:13px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+  .row{display:flex;gap:14px;flex-wrap:wrap}
+  .kpi{flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .kpi .n{font-size:26px;font-weight:700} .kpi .l{color:var(--mut);font-size:12px}
+  .kpi .n.good{color:var(--acc2)} .kpi .n.warn{color:var(--warn)}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--mut);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+  tr.clk{cursor:pointer} tr.clk:hover{background:var(--panel2)}
+  .bar{height:7px;background:var(--chip);border-radius:4px;overflow:hidden;min-width:90px}
+  .bar>i{display:block;height:100%;background:var(--acc)}
+  .pill{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;background:var(--chip);color:var(--mut)}
+  .pill.pk{background:#1f3a2e;color:#7ee2a8} .pill.fk{background:#22324a;color:#8bb9ff}
+  .pill.ok{background:#16331f;color:#7ee2a8} .pill.bad{background:#3a1f22;color:#ff9a9a}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .conf{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:8px;height:8px;border-radius:50%}
+  .hi{color:var(--acc2)} .md{color:var(--warn)} .lo{color:var(--bad)}
+  .btn{border:1px solid var(--line);background:var(--panel2);color:var(--txt);border-radius:7px;padding:5px 11px;cursor:pointer;font-size:12px}
+  .btn:hover{border-color:var(--acc)} .btn.ok{background:#16331f;border-color:#2ea043;color:#7ee2a8}
+  .btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+  .rev{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  .rev .h{display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--panel2);cursor:pointer}
+  .rev .h .name{font-weight:600} .rev .body{padding:13px;display:none;border-top:1px solid var(--line)}
+  .rev.open .body{display:block}
+  .ev{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:11px;margin:10px 0;font-size:12.5px}
+  .ev b{color:var(--mut);font-weight:600} .ev .kv{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .tag{background:var(--chip);border-radius:6px;padding:2px 8px;font-size:11px}
+  .acts{display:flex;gap:8px;margin-top:10px} .acts .done{color:var(--acc2);font-weight:600}
+  .filt{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+  .filt input,.filt select,.frm input,.frm select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:7px 10px;font-size:13px}
+  .desc{color:var(--txt)} .small{color:var(--mut);font-size:12px}
+  .backlink{cursor:pointer;color:var(--acc);font-size:13px;margin-bottom:10px;display:inline-block}
+  .note{background:#1a2230;border-left:3px solid var(--acc);padding:10px 12px;border-radius:6px;color:var(--mut);font-size:12.5px;margin:10px 0}
+  .frm{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px}
+  .frm label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mut)}
+  .editarea{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:6px;font-size:13px;font-family:inherit;resize:vertical}
+  .toast{position:fixed;bottom:18px;right:18px;background:var(--panel2);border:1px solid var(--acc);color:var(--txt);padding:10px 14px;border-radius:8px;font-size:13px;opacity:0;transition:.2s}
+  .toast.show{opacity:1}
+</style></head>
+<body>
+<div class="top">
+  <div class="brand"><b>db2</b>doc <span style="color:var(--mut);font-weight:400">· Schema Documentation Studio</span></div>
+  <div class="nav" id="nav"></div>
+  <div class="sel" id="srcsel"></div>
+</div>
+<div class="wrap" id="view">로딩 중…</div>
+<div class="toast" id="toast"></div>
+<script src="app.js"></script>
+</body></html>

@@ -22,3 +22,6 @@ out/*.mmd
 
 # built UI (regenerable; demo copy lives in results/)
 ui/db2doc_ui.html
+
+# Fernet master key
+secrets/
