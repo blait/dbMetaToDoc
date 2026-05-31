@@ -1,0 +1,21 @@
+# secrets / env
+.env
+*.pem
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# data & generated artifacts (keep repo light; regenerate from scripts)
+data/
+out/*.json
+out/*.md
+out/*.sql
+out/*.csv
+out/*.mmd
+*.zip
+
+# OS
+.DS_Store
