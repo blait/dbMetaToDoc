@@ -20,11 +20,26 @@ def load(name):
         return json.load(f)
 
 
+def load_opt(name):
+    try:
+        return load(name)
+    except FileNotFoundError:
+        return None
+
+
 def build_dataset():
     desc = load("descriptions.json")
     profile = load("profile.json")
     relations = load("relations.json")
     score = load("score.json")
+    details = load_opt("score_details.json") or {"items": []}
+
+    # index per-item truth comparison by (table, column) and (table, None)
+    truth_idx = {}
+    for it in details.get("items", []):
+        key = (it["table"], it.get("column"))
+        truth_idx[key] = {"reference": it["reference"],
+                          "cosine": it["cosine"], "judge": it["judge"]}
 
     pks = relations.get("primary_keys", {})
     fks = relations.get("foreign_keys", [])
@@ -45,6 +60,7 @@ def build_dataset():
         for c in tdesc["columns"]:
             pc = prof_idx.get((tname, c["name"]), {})
             st = pc.get("stats", {})
+            cmp_ = truth_idx.get((tname, c["name"]))
             cols.append({
                 "name": c["name"],
                 "description": c["description"],
@@ -58,11 +74,13 @@ def build_dataset():
                     "top_values": st.get("top_values", [])[:6],
                     "min": st.get("min"), "max": st.get("max"),
                 },
+                "truth": cmp_,  # {reference, cosine, judge} or None
             })
         tables.append({
             "name": tname,
             "rowcount": tinfo.get("rowcount", 0),
             "table_description": tdesc["table_description"],
+            "table_truth": truth_idx.get((tname, None)),
             "pk": pks.get(tname, {}).get("column"),
             "fks": [{"col": f["child_column"], "ref_table": f["parent_table"],
                      "ref_col": f["parent_column"], "inclusion": f["inclusion"]}
@@ -175,7 +193,7 @@ function go(page, table){ route={page, table:table||null}; render(); window.scro
 
 function nav(){
   const pendingCount = T.reduce((a,t)=>a+t.columns.filter(c=>c.confidence<0.9 && !decided[decKey(t.name,c.name)]).length,0);
-  const items=[['sources','Sources'],['review','Review Queue'],['catalog','Catalog'],['score','Quality']];
+  const items=[['sources','Sources'],['review','Review Queue'],['catalog','Catalog'],['verify','Verify vs Truth'],['score','Quality']];
   document.getElementById('nav').innerHTML = items.map(([k,l])=>{
     const b = k==='review'&&pendingCount?`<span class="badge">${pendingCount}</span>`:'';
     return `<button class="${route.page===k?'on':''}" onclick="go('${k}')">${l}${b}</button>`;
@@ -296,11 +314,19 @@ function pageCatalog(){
 function tableDetail(name){
   const t=T.find(x=>x.name===name); if(!t) return 'not found';
   const fkrows = t.fks.map(f=>`<span class="pill fk">FK ${f.col} → ${f.ref_table}.${f.ref_col} <span class="small">(incl ${f.inclusion})</span></span>`).join(' ');
-  const cols=t.columns.map(c=>`<tr>
+  const cols=t.columns.map(c=>{
+     const tr=c.truth;
+     const truthCell = tr
+       ? `<div class="desc small">${tr.reference}</div>${verdictBadge(tr)}`
+       : `<span class="small">정답지 없음</span>`;
+     return `<tr>
      <td><span class="mono">${c.name}</span><div class="small">${c.type||''}${c.nullable?' · null':''}</div></td>
      <td class="desc">${c.description}</td>
+     <td>${truthCell}</td>
      <td><span class="conf ${confClass(c.confidence)}">${confDot(c.confidence)} ${c.confidence?.toFixed(2)??'—'}</span></td>
-   </tr>`).join('');
+   </tr>`;}).join('');
+  const tt=t.table_truth;
+  const ttRow = tt? `<div class="ev"><b>정답지(테이블):</b> ${tt.reference} ${verdictBadge(tt)}</div>`:'';
   return `
   <span class="backlink" onclick="go('catalog')">← Catalog</span>
   <h1 class="mono">${t.name}</h1>
@@ -310,10 +336,12 @@ function tableDetail(name){
       ${t.pk?`<span class="pill pk">PK ${t.pk}</span> `:''}${fkrows}
       <span class="small" style="float:right">${num(t.rowcount)} rows · ${t.columns.length} columns</span>
     </div>
-    <table><thead><tr><th>Column</th><th>설명 (AI 복원)</th><th>신뢰도</th></tr></thead>
+    ${ttRow}
+    <table><thead><tr><th>Column</th><th>설명 (AI 복원)</th><th>정답지 (OMOP userGuidance)</th><th>신뢰도</th></tr></thead>
       <tbody>${cols}</tbody></table>
   </div>
-  <div class="note">💡 이 설명들은 <b>COMMENT ON</b> SQL로 export 되어 DBA 검토 후 실제 DB에 주석으로 반영할 수 있습니다.</div>`;
+  <div class="note">💡 정답지(OMOP 공식 데이터 딕셔너리)와 자동 대조됨. ✓=의미 일치(judge), cos=임베딩 유사도.
+     설명들은 <b>COMMENT ON</b> SQL로 export 해 실제 DB에 반영할 수 있습니다.</div>`;
 }
 
 function pageScore(){
@@ -337,12 +365,65 @@ function pageScore(){
   </div>`;
 }
 
+function verdictBadge(tr){
+  if(!tr) return '';
+  const ok = tr.judge===1;
+  const v = tr.judge==null ? `<span class="pill">cos ${tr.cosine}</span>`
+    : `<span class="pill" style="background:${ok?'#16331f':'#3a1f22'};color:${ok?'#7ee2a8':'#ff9a9a'}">${ok?'✓ 일치':'✗ 불일치'}</span> <span class="pill">cos ${tr.cosine}</span>`;
+  return `<div style="margin-top:4px">${v}</div>`;
+}
+
+function pageVerify(){
+  // flatten all column items that have a truth comparison
+  const items=[];
+  T.forEach(t=>t.columns.forEach(c=>{ if(c.truth) items.push([t,c]); }));
+  const matched=items.filter(([,c])=>c.truth.judge===1).length;
+  const mism=items.filter(([,c])=>c.truth.judge===0);
+  const filt=(document.getElementById('vf')?.value)||'mismatch';
+  let show;
+  if(filt==='mismatch') show=mism;
+  else if(filt==='match') show=items.filter(([,c])=>c.truth.judge===1);
+  else show=items;
+  show=show.slice().sort((a,b)=>a[1].truth.cosine-b[1].truth.cosine);
+  const rows=show.map(([t,c])=>`<tr>
+    <td><span class="mono small">${t.name}.${c.name}</span></td>
+    <td class="desc">${c.description}</td>
+    <td class="desc small">${c.truth.reference}</td>
+    <td>${c.truth.judge===1?'<span class="hi">✓</span>':'<span class="lo">✗</span>'}</td>
+    <td class="mono small">${c.truth.cosine}</td>
+   </tr>`).join('');
+  return `
+  <h1>Verify vs Truth</h1>
+  <p class="sub">AI가 복원한 설명을 OMOP 공식 정답지(userGuidance)와 1:1 대조. 의미 일치는 LLM-judge가 판정.</p>
+  <div class="row">
+    <div class="kpi"><div class="n good">${matched}</div><div class="l">의미 일치 (✓)</div></div>
+    <div class="kpi"><div class="n ${mism.length? 'warn':'good'}">${mism.length}</div><div class="l">불일치 (✗) — 검토 후보</div></div>
+    <div class="kpi"><div class="n">${items.length}</div><div class="l">대조된 컬럼</div></div>
+    <div class="kpi"><div class="n good">${fmtPct(matched/(items.length||1))}</div><div class="l">일치율</div></div>
+  </div>
+  <div class="card">
+    <div class="filt">
+      <span class="small">보기:</span>
+      <select id="vf" onchange="render()">
+        <option value="mismatch"${filt==='mismatch'?' selected':''}>불일치만 (✗)</option>
+        <option value="match"${filt==='match'?' selected':''}>일치만 (✓)</option>
+        <option value="all"${filt==='all'?' selected':''}>전체</option>
+      </select>
+      <span class="small" style="margin-left:auto">cosine 낮은 순 정렬</span>
+    </div>
+    <table><thead><tr><th>Column</th><th>AI 복원 설명</th><th>정답지 (OMOP)</th><th>judge</th><th>cos</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan=5 class="small">해당 항목 없음</td></tr>'}</tbody></table>
+  </div>
+  <div class="note">ℹ️ "불일치"라도 실제로는 우리 설명이 맞고 정답지가 ETL 지침인 경우가 많음. 그래서 cosine만으로 판단하지 않고 LLM-judge를 병행합니다.</div>`;
+}
+
 function render(){
   nav();
   const v=document.getElementById('view');
   v.innerHTML = route.page==='sources'?pageSources()
     : route.page==='review'?pageReview()
     : route.page==='catalog'?pageCatalog()
+    : route.page==='verify'?pageVerify()
     : pageScore();
 }
 render();

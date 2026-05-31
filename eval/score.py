@@ -147,6 +147,8 @@ def main():
                     help="skip LLM judge (cosine only, cheaper)")
     ap.add_argument("--limit", type=int, default=0,
                     help="score only first N tables (debug)")
+    ap.add_argument("--workers", type=int, default=8,
+                    help="parallel scoring workers (LLM/embedding calls)")
     args = ap.parse_args()
     use_judge = not args.no_judge
 
@@ -155,27 +157,47 @@ def main():
     field_truth = load_field_truth()
     table_truth = load_table_truth()
 
-    col_scores, tbl_scores = [], []
     tables = list(desc["tables"].items())
     if args.limit:
         tables = tables[:args.limit]
 
+    # build the list of scoring jobs first, then run them in parallel
+    jobs = []  # (level, table, column_or_None, generated, reference)
     for table, tdesc in tables:
         tl = table.lower()
-        # table-level
         ref_t = table_truth.get(tl)
-        st = sim_pair(tdesc["table_description"], ref_t, use_judge)
-        if st:
-            tbl_scores.append(st)
-        # column-level
+        if not is_blank_truth(ref_t):
+            jobs.append(("table", table, None, tdesc["table_description"], ref_t))
         for c in tdesc["columns"]:
             ref = field_truth.get((tl, c["name"].lower()))
             if not ref:
                 continue
-            s = sim_pair(c["description"], ref.get("userGuidance", ""), use_judge)
-            if s:
-                col_scores.append(s)
-        print(f"   scored {table:<26} cols={len(tdesc['columns'])}")
+            ug = ref.get("userGuidance", "")
+            if is_blank_truth(ug):
+                continue
+            jobs.append(("column", table, c["name"], c["description"], ug))
+
+    def run_job(job):
+        level, table, col, gen, ref = job
+        s = sim_pair(gen, ref, use_judge)
+        if s is None:
+            return None
+        return {"level": level, "table": table, "column": col,
+                "generated": gen, "reference": ref,
+                "cosine": s["cosine"], "judge": s["judge"]}
+
+    from concurrent.futures import ThreadPoolExecutor
+    details = []
+    with ThreadPoolExecutor(max_workers=args.workers) as ex:
+        for i, res in enumerate(ex.map(run_job, jobs), 1):
+            if res:
+                details.append(res)
+            if i % 20 == 0:
+                print(f"   scored {i}/{len(jobs)}")
+    print(f"   scored {len(jobs)}/{len(jobs)}")
+
+    col_scores = [d for d in details if d["level"] == "column"]
+    tbl_scores = [d for d in details if d["level"] == "table"]
 
     def agg(scores, key):
         vals = [s[key] for s in scores if s.get(key) is not None]
@@ -208,8 +230,11 @@ def main():
         "usage_doc": desc.get("usage"),
     }
     dump_json(report, out_path("score.json"))
+    # per-item details for side-by-side comparison in the UI
+    dump_json({"items": details}, out_path("score_details.json"))
     print("\n==================  SCORE  ==================")
     print(json.dumps(report, indent=2, ensure_ascii=False))
+    print(f"\n>> per-item detail -> out/score_details.json ({len(details)} items)")
 
 
 if __name__ == "__main__":
