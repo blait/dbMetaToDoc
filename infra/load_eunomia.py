@@ -61,7 +61,8 @@ def load_table(cur, table, csv_path):
             w.writerow(clean_row(row))
             n += 1
         buf.seek(0)
-        collist = ", ".join(cols)
+        # quote every column name (some, e.g. note_nlp.offset, are reserved words)
+        collist = ", ".join(f'"{c}"' for c in cols)
         sql = (f"COPY {PGSCHEMA}.{table} ({collist}) "
                f"FROM STDIN WITH (FORMAT csv, NULL '')")
         cur.copy_expert(sql, buf)

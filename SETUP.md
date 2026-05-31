@@ -52,26 +52,44 @@ python3 -m pip install -r requirements.txt
 
 ---
 
-## 2. RDS PostgreSQL 생성  _(infra/create_rds.sh — 작성 예정)_
+## 2. RDS PostgreSQL 생성 (완료 ✅)
 
-> TODO: aws cli로 RDS 인스턴스 생성, 보안그룹 인바운드(5432, 내 IP) 설정, 엔드포인트 확보.
-> 진행하며 실제 명령/출력 기록.
-
----
-
-## 3. OMOP 스키마 적재  _(infra/run_ddl.sh — 작성 예정)_
-
-> TODO: 5.3 DDL을 `ddl → primary_keys → indices` 순서로 적재(**constraints 제외** = FK 없는
-> "문서 없는" 상태). 정답지 채점용으로 constraints/Field_Level.csv는 `truth/`에 보관.
-
----
-
-## 4. GiBleed 데이터 적재  _(infra/load_eunomia.py — 작성 예정)_
-
-> TODO: GiBleed_5.3.zip 다운로드 → CSV → `COPY`로 적재.
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+PGPASSWORD="$(생성한_비번)" AWS_REGION=us-east-1 bash infra/create_rds.sh
+```
+- 기본 VPC(`vpc-0730eb31c8af2c67d`)에 보안그룹 `db2doc-pg-sg` 생성, **내 IP/32 만 5432 허용**.
+- 인스턴스: `db2doc-omop`, **db.t4g.micro + 20GB gp3 + PostgreSQL 16.14**, publicly-accessible,
+  backup 0일, single-AZ (PoC용 최소 구성).
+- 엔드포인트: `db2doc-omop.coztdyijwdme.us-east-1.rds.amazonaws.com:5432` (DB명 `omop`).
+- 접속 확인: `psql ... -c "SELECT version();"` → PostgreSQL 16.14 OK.
+- 비번은 `.env`에 저장(gitignore). **다 쓰면 삭제**:
+  `aws rds delete-db-instance --db-instance-identifier db2doc-omop --skip-final-snapshot --region us-east-1`
 
 ---
 
-## 5. 정답지 다운로드  _(작성 예정)_
+## 3. OMOP 스키마 적재
 
-> TODO: 5.3 Field_Level/Table_Level CSV를 `truth/`에 저장.
+```bash
+set -a; source .env; set +a
+bash infra/run_ddl.sh        # ddl -> primary_keys -> indices (constraints 제외)
+```
+- DDL의 `@cdmDatabaseSchema` placeholder를 `cdm` 스키마로 치환해 적재.
+- **FK(constraints)는 적재하지 않음** = "문서 없는" 입력. 원본 FK 파일은 `truth/`에 보관(채점용).
+
+---
+
+## 4. GiBleed 데이터 적재
+
+```bash
+.venv/bin/python infra/load_eunomia.py
+```
+- GiBleed_5.3.zip 다운로드 → 테이블별 CSV → `COPY`로 적재 (헤더 소문자 매핑, ISO `Z` 제거).
+
+---
+
+## 5. 정답지 다운로드
+
+```bash
+bash infra/fetch_truth.sh    # 5.3 Field_Level / Table_Level CSV -> truth/
+```

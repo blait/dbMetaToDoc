@@ -36,14 +36,15 @@ render() { sed "s/@cdmDatabaseSchema/${SCHEMA}/g" "$DDL_DIR/$1"; }
 echo ">> creating schema ${SCHEMA}"
 psql -v ON_ERROR_STOP=1 -c "CREATE SCHEMA IF NOT EXISTS ${SCHEMA};"
 
-echo ">> applying ddl (tables)"
+echo ">> applying ddl (tables only)"
 render "$DDL" | psql -v ON_ERROR_STOP=1 -f -
 
-echo ">> applying primary keys"
-render "$PK" | psql -v ON_ERROR_STOP=1 -f -
-
-echo ">> applying indices"
-render "$IDX" | psql -v ON_ERROR_STOP=1 -f -
-
-echo ">> DONE.  FK constraints intentionally skipped (saved to truth/${FK})."
+# NOTE: primary keys and indices are intentionally NOT applied here.
+#  - The GiBleed demo data contains duplicate values in some PK columns
+#    (a known data-quality quirk), so applying PKs before COPY would block loading.
+#  - Our experiment treats this as an undocumented DB anyway (strip_docs would
+#    drop PKs), and key recovery is scored against truth/, not the live catalog.
+# FK constraints are also skipped (saved to truth/${FK}) to reproduce the
+# "no documentation" input state.
+echo ">> DONE.  PK/indices/FK skipped on purpose (load data next, then profile)."
 psql -c "SELECT count(*) AS tables FROM information_schema.tables WHERE table_schema='${SCHEMA}';"
