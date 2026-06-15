@@ -38,6 +38,7 @@ import config  # noqa: F401  (loads .env)
 from ui import render_fetching
 from graph_ui import render_graph_page
 from home_ui import HOME
+from t2sql_ui import render_t2sql_page
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RUNS_DIR = os.path.join(HERE, "runs")
@@ -428,6 +429,28 @@ def graph_page(rid: str):
     if not read_meta(rid):
         raise HTTPException(404)
     return render_graph_page(rid)
+
+
+@app.get("/runs/{rid}/text2sql", response_class=HTMLResponse)
+def t2sql_page(rid: str):
+    if not read_meta(rid):
+        raise HTTPException(404)
+    return render_t2sql_page(rid)
+
+
+class QuestionIn(BaseModel):
+    question: str
+
+
+@app.post("/api/runs/{rid}/text2sql")
+def run_t2sql(rid: str, q: QuestionIn):
+    if not read_meta(rid):
+        raise HTTPException(404)
+    import text2sql
+    try:
+        return text2sql.run_text2sql(q.question, rid=rid)
+    except Exception as e:
+        raise HTTPException(500, f"text2sql failed: {e}")
 
 
 @app.get("/", response_class=HTMLResponse)

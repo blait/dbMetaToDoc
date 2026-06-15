@@ -18,7 +18,8 @@
 4. [평가(채점) 방법](#4-평가채점-방법)
 5. [온톨로지(개념) 레이어](#5-온톨로지개념-레이어)
 6. [활용 방법](#6-활용-방법)
-7. [실행 레퍼런스](#7-실행-레퍼런스)
+7. [text2sql 테스트 — 메타데이터 RAG + Graph + LangGraph](#7-text2sql-테스트--메타데이터-rag--graph--langgraph)
+8. [실행 레퍼런스](#8-실행-레퍼런스)
 
 ---
 
@@ -30,10 +31,14 @@ flowchart LR
     B --> C["3 describe ★<br/>의미 추론 (한국어)"]
     C --> D["4 catalog<br/>카탈로그 통합"]
     D --> E["5 score<br/>정답지 유사도"]
-    D --> F["7 graph<br/>Neptune 스키마 그래프"]
-    F --> G["8 concepts<br/>온톨로지 레이어"]
-    E --> H["웹앱: 런 목록 · 트리 카탈로그 · 그래프 시각화"]
+    D --> F["graph<br/>Neptune 스키마 그래프"]
+    F --> G["concepts<br/>온톨로지 레이어"]
+    D --> I["metasearch<br/>OpenSearch 메타 RAG"]
+    G --> J["text2sql<br/>LangGraph 질의"]
+    I --> J
+    E --> H["웹앱: 런 목록 · 트리 카탈로그 · 그래프 · text2sql"]
     G --> H
+    J --> H
 ```
 
 | 단계 | 파일 | 입력 → 출력 |
@@ -44,8 +49,10 @@ flowchart LR
 | 4. 카탈로그 | `catalog.py` | 1~3 통합 → `catalog.json` + 데이터 딕셔너리/COMMENT SQL/ERD |
 | 5. 채점 | `score.py` | catalog vs 정답지 → `score.json` (judge/cosine/F1) |
 | 7. 스키마 그래프 | `graph.py` | catalog → Neptune (openCypher 속성 그래프) |
-| 8. 개념 레이어 | `concepts.py` | catalog → `(:Concept)` 온톨로지 → Neptune |
-| 웹앱 | `webapp.py` | 런 관리 + 새 DB 연결 + 시각화 (`:8200`) |
+| 개념 레이어 | `concepts.py` | catalog → `(:Concept)` 온톨로지 → Neptune |
+| 메타 RAG | `metasearch.py` | catalog → OpenSearch 벡터 인덱스 (의미 검색) |
+| text2sql | `text2sql.py` | 질문 → RAG+그래프 → SQL 생성·실행 (LangGraph) |
+| 웹앱 | `webapp.py` | 런 관리 + 새 DB 연결 + 카탈로그/그래프/text2sql (`:8200`) |
 
 설계를 관통하는 원칙: **근거 없는 생성/수정 금지**. LLM의 모든 산출은 데이터 증거
 (값 포함관계, 분포, 조인 결과)로 게이트하거나, 검증 불가하면 신뢰도를 강등해 표시한다.
@@ -461,15 +468,77 @@ llm > name 순으로 신뢰한다.
 
 ### 6.3 확장 로드맵
 
-- **임베딩 스키마 검색**: 개념/설명 임베딩을 Neptune 벡터 인덱스에 적재 → 동의어 매칭을
-  의미 검색으로 격상. 단 Neptune Analytics 벡터 인덱스는 **그래프 생성 시점에만** 설정
-  가능(차원 고정)이라 그래프 재생성 필요.
+- **임베딩 스키마 검색**: 컬럼/테이블 설명 임베딩을 의미 검색으로 → **구현됨**(§7,
+  OpenSearch Serverless 메타데이터 RAG). 동의어 사전에 없는 표현도 의미 거리로 매칭.
 - **교차 judge 채점**(§4.2), **랜덤니스 게이트**(Zhang 2010), **승인 학습 루프**(검수 교정을
   few-shot으로 재주입), 검수 이력 메타스토어.
 
 ---
 
-## 7. 실행 레퍼런스
+## 7. text2sql 테스트 — 메타데이터 RAG + Graph + LangGraph
+
+복원한 온톨로지·그래프·메타데이터가 실제로 자연어 질의에 충분한지 확인하는 테스트 탭
+(`/runs/<id>/text2sql`). 세 검색 기반을 LangGraph로 엮어 SQL을 생성·실행한다.
+
+### 7.1 왜 메타데이터 RAG가 별도로 필요한가
+
+스키마 링킹("이 질문에 어떤 테이블·컬럼이 필요한가")에는 두 종류의 검색이 있다:
+
+| | 무엇을 찾나 | 도구 |
+|---|---|---|
+| **의미 검색** | "투약 이력" 같은 질문 용어를, 동의어 사전에 없어도 의미가 가까운 컬럼/테이블에 매칭 | **OpenSearch** (임베딩 벡터) |
+| **구조 검색** | 매칭된 테이블들을 어떻게 조인하나 — FK, 조인 경로, 개념 계층 | **Neptune** (그래프 순회) |
+
+개념 레이어의 `synonyms` 문자열 매칭(§5)은 LLM이 미리 뽑아둔 표현만 잡는다. 사용자가
+사전에 없는 말("투약 이력"→`drug_exposure`)을 쓰면 놓친다. **벡터 검색은 description
+임베딩으로 의미 거리를 재므로** 사전에 없던 표현도 잡는다. 결정적으로, 수천 테이블 규모
+(전체 스키마가 LLM 컨텍스트에 안 들어가는 엔터프라이즈 DB; Spider 2.0이 보인 91%→21% 붕괴
+지점 [P10])에서는 "벡터로 후보를 좁히고 → 그래프로 조인 확장"이 **필수**가 된다.
+현재 37테이블 규모에선 정확도 이득이 작지만, **대규모로 스케일해도 그대로 동작하는
+아키텍처를 갖춰둔 것**이다.
+
+구현: `metasearch.py` — 카탈로그의 테이블/컬럼 description을 Titan Embed v2(다국어 →
+한국어 설명 그대로)로 임베딩해 OpenSearch Serverless 벡터 인덱스(faiss HNSW, cosine)에
+적재(433 docs). 검색은 질문 임베딩으로 knn top-k.
+
+### 7.2 LangGraph 파이프라인 (`text2sql.py`)
+
+`StateGraph`로 5개 노드를 잇는다. 각 노드의 중간 산출이 UI에 단계별로 보인다.
+
+```
+retrieve → expand → generate → execute ─(성공/한도)→ END
+                          ↑                  │
+                          └──── repair ──────┘  (DB 오류 시에만)
+```
+
+| 노드 | 하는 일 | 기반 |
+|---|---|---|
+| **retrieve** | 질문과 의미가 가까운 테이블/컬럼 top-k | OpenSearch 벡터 |
+| **expand** | retrieve한 테이블들의 PK/FK + 쌍별 최단 조인 경로 | Neptune openCypher |
+| **generate** | retrieve+expand한 스키마 컨텍스트(설명·키·조인조건)**만**으로 PostgreSQL 작성 | Claude (JSON 강제) |
+| **execute** | RDS에 **읽기 전용** 실행 — SELECT만 정규식 가드, LIMIT 자동, 15s 타임아웃, 결과 미리보기 | RDS PostgreSQL |
+| **repair** | 실행이 DB 오류로 실패하면 오류 메시지를 프롬프트에 넣어 재생성 (최대 2회) | — |
+
+repair 루프는 **실제 DB 오류에만** 트리거된다 — 근거 없는 자기수정을 피하라는 §2 [P7]
+원칙대로, "그냥 다시 봐"가 아니라 "이 SQL이 이 오류로 실패했다"는 외부 신호로만 돈다.
+실행은 SELECT/WITH만 허용하고 INSERT/UPDATE/DELETE/DDL은 정규식으로 차단한다.
+
+### 7.3 동작 예시 (실측)
+
+질문 "환자별 처방 약물 수를 많은 순으로":
+1. retrieve → `drug_exposure`, `drug_era`, `cost`, `provider`, `drug_strength`
+2. expand → `drug_exposure` PK/FK + person/concept 조인 경로
+3. generate → `SELECT person_id, COUNT(drug_exposure_id) AS drug_count
+   FROM cdm.drug_exposure GROUP BY person_id ORDER BY drug_count DESC`
+4. execute → 50행 (1회 성공, repair 불필요)
+
+질문 "가장 흔한 진단 상위 10개" → `condition_occurrence`를 `concept`에 조인해 진단명까지
+가져오는 SQL을 생성, 10행 반환. "여성 환자가 방문한 진료기관별 방문 횟수" → 코드값 해석
+(§3.4)으로 학습된 `gender_concept_id = 8532`(여성)를 WHERE에 정확히 사용.
+
+---
+
+## 8. 실행 레퍼런스
 
 ```bash
 cd v2
@@ -490,15 +559,23 @@ V2_OUT_DIR=runs/<id> ../.venv/bin/python translate.py run
 V2_OUT_DIR=runs/<id> ../.venv/bin/python graph.py load
 V2_OUT_DIR=runs/<id> ../.venv/bin/python concepts.py all  # 추출(LLM)+적재
 ../.venv/bin/python graph.py delete                       # ★ PoC 후 과금 중지
+
+# text2sql용 메타데이터 RAG (OpenSearch Serverless) — §7
+V2_OUT_DIR=runs/<id> ../.venv/bin/python metasearch.py index           # 카탈로그 → 벡터 인덱스
+../.venv/bin/python metasearch.py search "환자별 투약 이력"            # 검색 프로브
+V2_OUT_DIR=runs/<id> ../.venv/bin/python text2sql.py "질문..."         # CLI 파이프라인
+# → 웹 탭: /runs/<id>/text2sql
 ```
 
 | 환경변수 | 용도 | 기본값 |
 |---|---|---|
 | `BEDROCK_MODEL_ID` | 생성/judge LLM | `us.anthropic.claude-opus-4-8` |
-| `BEDROCK_EMBED_MODEL_ID` | cosine 임베딩 | `amazon.titan-embed-text-v2:0` |
+| `BEDROCK_EMBED_MODEL_ID` | cosine·RAG 임베딩 | `amazon.titan-embed-text-v2:0` |
 | `NEPTUNE_GRAPH_ID` | Neptune Analytics 그래프 | (graph.py create 출력) |
+| `AOSS_ENDPOINT` | OpenSearch Serverless 컬렉션 엔드포인트 | (create-collection 출력) |
 | `V2_OUT_DIR` | 런 산출물 디렉토리 | `out/` |
 | `V2_MAX_LLM_TOKENS` / `V2_MAX_LLM_CALLS` | 자원 가드레일 [P1] | 800k / 400 |
 
 비용 참고: describe 단계 약 217k in / 38k out 토큰(검증 루프 포함, 37테이블 기준).
-Neptune Analytics 16 m-NCU는 시간당 $0.48 — **확인 끝나면 반드시 delete**.
+Neptune Analytics 16 m-NCU 시간당 $0.48 + OpenSearch Serverless(최소 OCU 시간당 과금) —
+**확인 끝나면 graph.py delete + OpenSearch 컬렉션 삭제로 과금 중지**.

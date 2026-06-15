@@ -128,7 +128,8 @@ th{background:#fafbfc;color:var(--muted);font-size:10.5px;font-weight:700;
  <h1>스키마 그래프 — text2sql 조인 경로</h1>
  <span class="src-pill" id="srcpill">로딩…</span>
  <span style="margin-left:auto"></span>
- <a href="__BACK__">&larr; 카탈로그 상세</a>&nbsp;&nbsp;&nbsp;<a href="/">런 목록</a>
+ <a href="__BACK__">&larr; 카탈로그</a>&nbsp;&nbsp;&nbsp;
+ <a href="__BACK__/text2sql">text2sql</a>&nbsp;&nbsp;&nbsp;<a href="/">런 목록</a>
 </header>
 <div class="toolbar">
  <span class="tlabel">조인 경로</span>

@@ -375,8 +375,9 @@ def render_fetching(run_id):
   }}
   init(catalog, await get('score.json'), await get('score_details.json'));
 }})();"""
-    back = (f'<a href="/runs/{run_id}/graph">스키마 그래프 (Neptune) &rarr;</a>'
-            f'&nbsp;&nbsp;<a href="/">&larr; 런 목록</a>')
+    back = (f'<a href="/runs/{run_id}/graph">스키마 그래프</a>&nbsp;&nbsp;&nbsp;'
+            f'<a href="/runs/{run_id}/text2sql">text2sql</a>&nbsp;&nbsp;&nbsp;'
+            f'<a href="/">&larr; 런 목록</a>')
     return (DETAIL_PAGE
             .replace("__BACKLINK__", back)
             .replace("__BOOTSTRAP__", boot))
