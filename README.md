@@ -7,6 +7,9 @@
 DBA가 처음 보는 DB를 받았을 때 하는 일 — *데이터 좀 떠보고, 키·조인 관계 파악하고, "아 이 테이블은
 환자 진단 기록이구나" 결론 내리는 것* — 을 자동화한다. 100% 자동이 아니라 **AI가 초안을 만들고
 DBA가 검수**하는 구조다.
+<img width="750" height="761" alt="KakaoTalk_Photo_2026-06-18-11-56-34 002" src="https://github.com/user-attachments/assets/e212c53c-3778-4036-a2c5-95add4f075cb" />
+<img width="759" height="766" alt="KakaoTalk_Photo_2026-06-18-11-56-34 003" src="https://github.com/user-attachments/assets/6839ea70-aa82-4cb2-9532-a122d54a3ef9" />
+<img width="761" height="774" alt="KakaoTalk_Photo_2026-06-18-11-56-33 001" src="https://github.com/user-attachments/assets/8405c51a-0a26-4d55-8193-2d1285415657" />
 
 ---
 
