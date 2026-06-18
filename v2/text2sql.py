@@ -34,19 +34,94 @@ MAX_REPAIRS = 2
 ROW_LIMIT = 50
 
 
+# ------------------------------------------------------------- concept layer
+def match_concepts(question):
+    """Ontology path: match question terms to Concept nodes (by name/Korean
+    name/synonym), expand IS_A children, and return the tables they MAP_TO.
+
+    This is the structural counterpart to vector search: it catches abstract
+    parent terms (e.g. '임상 이벤트' → all of condition/drug/measurement/...)
+    that semantic search over individual columns would miss, and it uses the
+    curated synonyms. Returns {} (no-op) if Neptune/concepts are unavailable.
+    """
+    gid = cfg("NEPTUNE_GRAPH_ID")
+    if not gid:
+        return {"matched": [], "tables": []}
+    try:
+        import graph as G
+        rows = G.run_query(gid, """
+            MATCH (c:Concept)
+            RETURN c.name AS name, c.name_ko AS name_ko,
+                   c.synonyms AS synonyms
+        """)["results"]
+    except Exception:
+        return {"matched": [], "tables": []}
+
+    q = question.lower()
+    matched = []
+    for c in rows:
+        terms = [c.get("name") or "", c.get("name_ko") or ""]
+        terms += [s.strip() for s in (c.get("synonyms") or "").split(",")]
+        for t in terms:
+            t = t.strip()
+            if len(t) >= 2 and t.lower() in q:
+                matched.append(c["name"])
+                break
+    if not matched:
+        return {"matched": [], "tables": []}
+
+    # expand to descendants via IS_A (abstract parent -> concrete children)
+    # and collect tables mapped to matched + descendant concepts
+    try:
+        res = G.run_query(gid, """
+            UNWIND $names AS cn
+            MATCH (c:Concept {name: cn})
+            OPTIONAL MATCH (d:Concept)-[:IS_A*1..3]->(c)
+            WITH collect(DISTINCT c) + collect(DISTINCT d) AS cs
+            UNWIND cs AS cc
+            MATCH (cc)-[:MAPPED_TO]->(t:Table)
+            RETURN DISTINCT cc.name AS concept, t.name AS tbl
+        """, {"names": matched})["results"]
+    except Exception:
+        return {"matched": matched, "tables": []}
+    tables, seen = [], set()
+    pairs = []
+    for r in res:
+        pairs.append({"concept": r["concept"], "table": r["tbl"]})
+        if r["tbl"] not in seen:
+            seen.add(r["tbl"])
+            tables.append(r["tbl"])
+    return {"matched": matched, "tables": tables, "mappings": pairs}
+
+
 # ----------------------------------------------------------------- retrieve
 def retrieve(question, k=14):
-    """Metadata RAG: top-k schema elements by semantic similarity."""
+    """Hybrid metadata RAG: semantic vector search (OpenSearch) UNION
+    ontology concept matching (Neptune). Vector search finds columns by
+    meaning; the concept layer adds tables reachable through matched
+    business terms and their IS_A hierarchy. Vector hits lead (ranked),
+    concept-only tables are appended."""
     import metasearch
     hits = metasearch.search(question, k=k)
-    tables = []
-    seen = set()
+    tables, seen = [], set()
     for h in hits:
         t = h["table"]
         if t and t not in seen:
             seen.add(t)
             tables.append(t)
-    return {"hits": hits, "tables": tables}
+
+    concepts = match_concepts(question)
+    concept_added = []
+    for t in concepts.get("tables", []):
+        if t not in seen:
+            seen.add(t)
+            tables.append(t)
+            concept_added.append(t)
+
+    return {"hits": hits, "tables": tables,
+            "concepts": {"matched": concepts.get("matched", []),
+                         "mappings": concepts.get("mappings", []),
+                         "added_tables": concept_added}}
 
 
 # ----------------------------------------------------------------- expand
@@ -239,16 +314,50 @@ def build_graph():
 
     def n_retrieve(s):
         r = retrieve(s["question"])
+        hits = r["hits"]
+        # sub-stage breakdown for the UI
+        vec_tables, vseen = [], set()
+        for h in hits:
+            if h["table"] and h["table"] not in vseen:
+                vseen.add(h["table"])
+                vec_tables.append(h["table"])
+        r["substages"] = {
+            "vector": {
+                "engine": "OpenSearch Serverless (벡터)",
+                "n_hits": len(hits),
+                "n_table_hits": sum(1 for h in hits if h["kind"] == "table"),
+                "n_column_hits": sum(1 for h in hits if h["kind"] == "column"),
+                "tables_from_vector": vec_tables,
+            },
+            "concept": {
+                "engine": "Neptune 개념 레이어 (온톨로지)",
+                "matched": r["concepts"]["matched"],
+                "added_tables": r["concepts"]["added_tables"],
+            },
+            "merge": {
+                "final_tables": r["tables"],
+                "n_final": len(r["tables"]),
+            },
+        }
         return {"retrieved": r,
                 "steps": s.get("steps", []) + [{"step": "retrieve", "data": r}]}
 
     def n_expand(s):
         e = expand(s["retrieved"]["tables"])
+        # per-table column counts so the UI can show what was pulled
+        cols_by_t = {}
+        for c in e["columns"]:
+            cols_by_t.setdefault(c["tbl"], 0)
+            cols_by_t[c["tbl"]] += 1
         return {"expanded": e,
                 "steps": s["steps"] + [{"step": "expand", "data": {
                     "tables": s["retrieved"]["tables"],
-                    "join_paths": e["paths"], "fk_count": len(e["fks"]),
-                    "source": e["source"]}}]}
+                    "source": e["source"],
+                    "n_columns": len(e["columns"]),
+                    "columns_per_table": cols_by_t,
+                    "fk_count": len(e["fks"]),
+                    "fks": e["fks"][:30],
+                    "join_paths": e["paths"]}}]}
 
     def n_generate(s):
         prior = s.get("result") or {}

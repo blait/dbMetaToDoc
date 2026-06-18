@@ -442,15 +442,70 @@ class QuestionIn(BaseModel):
     question: str
 
 
+def _t2sql_history_path(rid):
+    return os.path.join(run_dir(rid), "t2sql_history.json")
+
+
+def _append_history(rid, entry):
+    path = _t2sql_history_path(rid)
+    hist = []
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                hist = json.load(f)
+        except Exception:
+            hist = []
+    hist.insert(0, entry)          # newest first
+    hist = hist[:100]              # cap
+    with open(path, "w") as f:
+        json.dump(hist, f, ensure_ascii=False, indent=2)
+
+
 @app.post("/api/runs/{rid}/text2sql")
 def run_t2sql(rid: str, q: QuestionIn):
     if not read_meta(rid):
         raise HTTPException(404)
     import text2sql
     try:
-        return text2sql.run_text2sql(q.question, rid=rid)
+        out = text2sql.run_text2sql(q.question, rid=rid)
     except Exception as e:
         raise HTTPException(500, f"text2sql failed: {e}")
+    # persist a compact history entry (full steps kept for replay)
+    res = out.get("result") or {}
+    exec_step = next((s for s in reversed(out.get("steps", []))
+                      if s["step"] == "execute"), None)
+    ed = exec_step["data"] if exec_step else {}
+    _append_history(rid, {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "question": q.question,
+        "ok": bool(res.get("ok")),
+        "rowcount": ed.get("rowcount"),
+        "attempts": out.get("attempts"),
+        "sql": out.get("sql"),
+        "steps": out.get("steps"),       # full detail for "이력에서 다시 보기"
+    })
+    return out
+
+
+@app.get("/api/runs/{rid}/text2sql/history")
+def t2sql_history(rid: str):
+    if not read_meta(rid):
+        raise HTTPException(404)
+    path = _t2sql_history_path(rid)
+    if not os.path.exists(path):
+        return {"history": []}
+    with open(path) as f:
+        return {"history": json.load(f)}
+
+
+@app.delete("/api/runs/{rid}/text2sql/history")
+def t2sql_history_clear(rid: str):
+    if not read_meta(rid):
+        raise HTTPException(404)
+    path = _t2sql_history_path(rid)
+    if os.path.exists(path):
+        os.remove(path)
+    return {"ok": True}
 
 
 @app.get("/", response_class=HTMLResponse)

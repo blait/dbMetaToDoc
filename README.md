@@ -67,6 +67,55 @@ flowchart TD
 
 ---
 
+## description 생성 8가지 기법 (코드베이스 기반 정리)
+
+문서 없는 DB에서 의미를 복원하는 핵심 기법들. 관통 원칙은 **"데이터로 확인되는 것만
+자신 있게 말하고, 확인 못 한 건 낮은 신뢰도로 표시한다"**(환각 방지). 아래는 v2 구현
+(`v2/profiler.py`, `v2/relations.py`, `v2/describe.py`) 기준이며, 동작 방식·실제 예시는
+[`v2/SOLUTION.md`](v2/SOLUTION.md), 논문 근거는 [`v2/GUIDE.md`](v2/GUIDE.md) 참조.
+
+```mermaid
+flowchart TD
+    subgraph P["프로파일러 (profiler.py)"]
+        T1["① 통계 신호<br/>테이블당 1쿼리로 distinct·null·분포 계산<br/>distinct≤50 → 코드값(enum) 판정"]
+    end
+    subgraph R["관계 복원 (relations.py)"]
+        T2["② PK 전수검사<br/>전체 테이블 distinct로 유일성 확정<br/>score=50·f_u+20·n+15·d+15·p (임계 70)"]
+        T3["③ FK 3-소스<br/>값포함관계 + 이름규칙 + LLM제안→값검증<br/>역할접두사(preceding_/parent_) 해석"]
+        T4["④ 정밀도 게이트 G1~G6<br/>이름·포함율·점수·1자식1부모<br/>·허브견제·PK대상 검문"]
+    end
+    subgraph D["의미 추론 (describe.py)"]
+        T5["⑤ ★코드값 라벨 해석<br/>복원 FK로 lookup 테이블 실제 JOIN<br/>9201 → 'Inpatient Visit'"]
+        T6["⑥ 맥락 전파<br/>FK 위상순 부모먼저 → 자식 컨텍스트<br/>→ DB 도메인 종합"]
+        T7["⑦ 생성→자기검증→재생성<br/>의존성 그룹 모순탐지<br/>걸린 테이블만 1회 재작성"]
+        T8["⑧ 신뢰도 보정<br/>데이터 없으면 conf×0.5+플래그<br/>코드해석 시 +0.05"]
+    end
+    T1 --> T2 --> T3 --> T4 --> T5 --> T6 --> T7 --> T8
+    T8 --> OUT["검증된 설명 + 신뢰도<br/>(낮은 신뢰도만 사람 검수)"]
+```
+
+| # | 기법 | 코드에서 어떻게 (핵심 상수·수식) | 단계 |
+|---|---|---|---|
+| ① | **통계 신호로 컬럼 성격 판별** | `bulk_stats`가 **테이블당 단일 집계쿼리**로 표본(≤1000행)의 null비율·distinct비율·min/max 계산. distinct ≤ 50이면 코드값(enum) 후보로 보고 상위 10개 값 분포 수집 | `profiler.py` |
+| ② | **PK 전수검사 복원** | `detect_pks`: 점수 `50·f_u + 20·n + 15·d + 15·p`(임계 70). 유일성 `f_u`는 표본이 아닌 **전체 테이블 distinct**(`full_distinct_ratio==1.0`)로 확정. 단일키 없으면 2컬럼 복합키(≥100행), 선언키 있으면 최우선 | `relations.py` |
+| ③ | **FK 3-소스 복원** | `stat`(이름유사도+값포함율, 점수 `40·v+20·sim+30+10·nu`) + `name`(빈 테이블용, sim≥0.8) + `llm`(LLM 제안→값포함율 검증, v≥0.5만 채택). `name_similarity`가 `preceding_`/`_parent_` 등 역할접두사를 벗겨 self-FK 인식 | `relations.py` |
+| ④ | **정밀도 방어 게이트** | G1 이름신호≥0.5 → G2 포함율≥0.5 → G3 점수≥60 → G4 `merge_best_parent`(자식당 부모 1개, 신뢰순 `declared>stat>llm>name`) → G5 `fanout_penalty`(허브 과참조 시 ×0.8) → G6 대상이 PK일 때만 | `relations.py` |
+| ⑤ | ★ **코드값 라벨 해석** | `resolve_codes`: enum 후보(distinct≤50)이고 FK가 가리키는 부모에 데이터 있으면, 부모의 레이블 컬럼(name/label/…)을 골라 상위 8개 코드를 **실제 JOIN**해 코드→라벨 쌍을 프롬프트에 주입 | `describe.py` |
+| ⑥ | **관계 순서 맥락 전파** | `fk_order`로 FK 위상정렬(부모 먼저) → `describe_table`이 이미 만든 부모 설명을 자식 프롬프트에 `neighbour`로 전달 → `synthesize_db`가 전체 설명을 모아 DB 도메인 종합 | `describe.py` |
+| ⑦ | **생성→자기검증→재생성** | `dependency_groups`로 FK 연결 테이블을 묶고, `sanity_check_group`이 그룹 내 모순(FK 방향·용어·목적 오인) 탐지. medium/high 이슈가 걸린 테이블만 이슈 텍스트를 받아 **1회 재작성** | `describe.py` |
+| ⑧ | **증거 기반 신뢰도 보정** | `calibrate`: 컬럼별 증거원장(`has_data`/`has_distribution`/`resolved_codes`) 기록. 데이터 없는 컬럼은 conf `×0.5` + `data_unverified` 플래그(→검수 큐), 코드 해석된 컬럼은 `+0.05` | `describe.py` |
+
+설계 제약: **근거 없는 self-review 금지.** 모든 수정 단계(③의 LLM FK 제안, ⑦의 sanity
+재생성)는 외부 증거(값 포함관계, 명시적 모순 리포트)로만 트리거한다 — "LLM은 외부 피드백
+없이 자기 추론을 고치지 못한다"(ICLR 2024)는 결과를 설계 원칙으로 채택.
+
+> **블라인드 검증**: 추론 프롬프트에서 도메인 고유명사(OMOP·SNOMED 등)를 모두 제거한
+> 조건에서 측정 — 컬럼 의미 일치 **95%** / 테이블 **100%** / PK F1 **0.95** / FK F1 **0.96**.
+> 힌트 제거 후 오히려 컬럼 정확도가 상승해, 정확도가 도메인 지식이 아닌 **데이터 증거**에서
+> 나옴을 입증. 정답지는 채점에만 쓰이고 추론 코드는 일절 읽지 않는다.
+
+---
+
 ## 검증 — "정말 맞나?"를 숫자로 증명
 
 채점이 가능한 공개 표준 **OMOP CDM**(공식 데이터 딕셔너리가 정답지 역할)으로 측정했다.

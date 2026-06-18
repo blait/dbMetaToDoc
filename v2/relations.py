@@ -102,14 +102,12 @@ def detect_pks(profile):
         names = {c["name"].lower(): c["name"] for c in cols}
         cand = names.get(f"{table.lower()}_id")
         if not cand:
-            # exclude reference-shaped columns: *_concept_id / *_source_id,
-            # and any column that names ANOTHER table's id (it's an FK)
+            # domain-agnostic: a *_id column whose stem names ANOTHER table is
+            # a reference (FK), not this table's own PK — exclude it.
             id_cols = []
             for c in cols:
                 cl = c["name"].lower()
                 if not (cl.endswith("_id") or cl in GENERIC_ID_NAMES):
-                    continue
-                if cl.endswith("_concept_id") or cl.endswith("_source_id"):
                     continue
                 stem = norm_col(cl)[:-3]  # strip trailing _id
                 if stem in table_names and stem != table.lower():
