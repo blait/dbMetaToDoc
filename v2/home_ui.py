@@ -43,10 +43,16 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#eef0f3;
 .field input:focus{outline:none;border-color:var(--accent);background:#fff;
  box-shadow:0 0 0 3px rgba(79,70,229,.12)}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.checks{margin:14px 0 16px;display:flex;flex-direction:column;gap:8px}
-.checks label{display:flex;gap:8px;align-items:center;font-size:13px;color:#374151}
-.checks input{accent-color:var(--accent)}
-.btns{display:flex;gap:8px}
+.checks{margin:6px 0 4px;display:flex;flex-direction:column;gap:8px}
+.checks label{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:#374151;line-height:1.4}
+.checks input{accent-color:var(--accent);margin-top:2px}
+.adv{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+.adv summary{font-size:12px;color:var(--muted);cursor:pointer;font-weight:600;
+ list-style:none}
+.adv summary:hover{color:var(--ink)}
+.adv summary::before{content:'▸ ';font-size:10px}
+.adv[open] summary::before{content:'▾ '}
+.btns{display:flex;gap:8px;margin-top:14px}
 button{border:1px solid var(--line);background:#fff;border-radius:9px;
  padding:9px 16px;font-size:13.5px;font-family:inherit;font-weight:600;cursor:pointer;
  transition:all .15s}
@@ -124,17 +130,25 @@ button:disabled{opacity:.5;cursor:default}
    <div class="field"><label>사용자</label><input type="text" name="user" required></div>
    <div class="field"><label>비밀번호</label><input type="password" name="password" required></div>
   </div>
-  <div class="checks">
-   <label><input type="checkbox" name="with_truth"> OMOP 정답지 채점 포함 <span style="color:#9ca3af">(평가용)</span></label>
-   <label id="njwrap" style="display:none"><input type="checkbox" name="no_judge"> LLM judge 생략 (cosine만)</label>
-  </div>
   <div class="btns">
    <button id="testbtn">연결 테스트</button>
    <button id="startbtn" class="primary">분석 시작</button>
   </div>
   <span class="msg" id="connmsg"></span>
-  <p class="note">파이프라인은 스키마·통계·샘플만 읽습니다(읽기 전용).
-  비밀번호는 실행 프로세스에만 전달되고 저장되지 않습니다. 현재 PostgreSQL 지원.</p>
+  <p class="note">스키마·통계·샘플만 읽는 <b>읽기 전용</b> 분석입니다. 기존 주석(COMMENT)·
+  키 제약이 있으면 단서로 활용하고, DB를 변경하지 않습니다. 비밀번호는 실행 프로세스에만
+  전달되고 저장되지 않습니다. 현재 PostgreSQL 지원.</p>
+  <details class="adv">
+   <summary>고급 — 평가 모드 (정답지가 있는 벤치마크 DB 전용)</summary>
+   <div class="checks">
+    <label><input type="checkbox" name="with_truth"> 정답지 채점 포함 (OMOP 등 공식
+     데이터 딕셔너리와 대조)</label>
+    <label id="njwrap" style="display:none"><input type="checkbox" name="no_judge">
+     LLM judge 생략 (cosine만)</label>
+   </div>
+   <p class="note" style="margin-top:6px">고객 DB에는 사용하지 마세요 — 정답지가 없으면
+   채점이 의미 없습니다. 일반 분석은 위 "분석 시작"으로 카탈로그만 생성됩니다.</p>
+  </details>
  </form>
 </div>
 </aside>
@@ -142,9 +156,9 @@ button:disabled{opacity:.5;cursor:default}
 <main>
  <div class="runs-head"><h2>분석 런</h2><span class="cnt" id="runcount"></span></div>
  <div id="runbody"><div class="skel"></div></div>
- <p class="foot-note">의미 일치 점수는 <b>LLM judge</b>(모델명은 카드 안 표기),
- PK/FK F1은 정답지와의 <b>결정적 집합 비교</b>(비-LLM)입니다.
- 정답지 없이 연결한 DB는 카탈로그만 생성됩니다.</p>
+ <p class="foot-note">새 DB를 연결하면 <b>카탈로그</b>(테이블·컬럼 의미, 키, 신뢰도)를
+ 생성합니다. 정답지가 있는 벤치마크 DB는 고급 옵션에서 채점을 켜면 의미 일치도(LLM judge)와
+ PK/FK F1까지 측정합니다.</p>
 </main>
 
 </div>
@@ -209,8 +223,8 @@ function metricsHTML(m){
       <div class="metric"><div class="k">컬럼</div><div class="v">${h.columns??'—'}</div></div>
       <div class="metric"><div class="k">도메인 추론</div>
         <div class="v" style="font-size:13px">${esc(h.domain||'—')}</div></div>
-      <div class="metric"><div class="k">채점</div>
-        <div class="v" style="font-size:12px;font-weight:500;color:var(--muted)">정답지 없음<br>카탈로그만</div></div>
+      <div class="metric"><div class="k">결과</div>
+        <div class="v" style="font-size:12px;font-weight:600;color:var(--accent)">카탈로그 생성됨<br>클릭해 열람</div></div>
     </div>`;
   return `<div class="metrics">
     <div class="metric llm" title="LLM judge: ${esc(h.judge_model||'')}">

@@ -25,6 +25,7 @@ run dir (V2_OUT_DIR or out/).
 """
 import argparse
 import json
+import os
 import sys
 import time
 
@@ -43,15 +44,71 @@ def client():
                                                "mode": "adaptive"}))
 
 
+def meta_path():
+    """meta.json of the current run (V2_OUT_DIR=runs/<id>)."""
+    d = cfg("V2_OUT_DIR")
+    return os.path.join(d, "meta.json") if d else None
+
+
+def read_meta():
+    p = meta_path()
+    if p and os.path.exists(p):
+        with open(p) as f:
+            return json.load(f)
+    return {}
+
+
+def write_meta_graph_id(gid):
+    p = meta_path()
+    if not p or not os.path.exists(p):
+        return
+    with open(p) as f:
+        meta = json.load(f)
+    meta["graph_id"] = gid
+    with open(p, "w") as f:
+        json.dump(meta, f, indent=2, ensure_ascii=False)
+
+
 def graph_id(args):
-    gid = getattr(args, "graph_id", None) or cfg("NEPTUNE_GRAPH_ID")
-    if not gid:
-        # fall back to the first available graph with our name
-        for g in client().list_graphs()["graphs"]:
-            if g["name"] == GRAPH_NAME and g["status"] == "AVAILABLE":
-                return g["id"]
-        raise SystemExit("no graph: set NEPTUNE_GRAPH_ID or run "
-                         "`graph.py create` first")
+    """Per-run graph id: explicit arg > this run's meta.json > env (legacy)."""
+    gid = getattr(args, "graph_id", None)
+    if gid:
+        return gid
+    gid = read_meta().get("graph_id")
+    if gid:
+        return gid
+    return cfg("NEPTUNE_GRAPH_ID")  # legacy single-graph fallback
+
+
+def ensure_run_graph():
+    """Return this run's dedicated Neptune graph, creating it if absent.
+
+    Each run gets its OWN graph (physical isolation). The id is persisted in
+    the run's meta.json. NOTE: each graph is billed separately — run deletion
+    must delete the graph (webapp does this)."""
+    gid = read_meta().get("graph_id")
+    c = client()
+    if gid:
+        try:
+            if c.get_graph(graphIdentifier=gid)["status"] == "AVAILABLE":
+                return gid
+        except Exception:
+            pass  # stale id -> recreate
+    run = current_run_id()
+    name = f"db2doc-{run}"[:63]
+    g = c.create_graph(graphName=name, provisionedMemory=16,
+                       publicConnectivity=True, replicaCount=0,
+                       deletionProtection=False)
+    gid = g["id"]
+    print(f">> created dedicated graph {gid} ({name}) — waiting AVAILABLE")
+    while True:
+        st = c.get_graph(graphIdentifier=gid)["status"]
+        if st == "AVAILABLE":
+            break
+        if st in ("FAILED", "DELETING"):
+            raise SystemExit(f"graph creation failed: {st}")
+        time.sleep(15)
+    write_meta_graph_id(gid)
     return gid
 
 
@@ -144,26 +201,51 @@ def build_payload(catalog):
     return db_node, tables, columns, refs, joins
 
 
+def current_run_id():
+    """Derive the run id from V2_OUT_DIR (…/runs/<id>) so each run's graph is
+    namespaced inside the single Neptune Analytics graph (per-graph billing
+    makes one-graph-per-run impractical)."""
+    d = cfg("V2_OUT_DIR") or ""
+    rid = os.path.basename(os.path.normpath(d)) if d else ""
+    return rid or "default"
+
+
+def delete_run_namespace(gid, run):
+    """Remove all nodes/edges of one run (idempotent reload)."""
+    run_query(gid, "MATCH (n {run: $run}) DETACH DELETE n", {"run": run})
+
+
 def cmd_load(args):
-    gid = graph_id(args)
+    gid = ensure_run_graph()          # this run's dedicated graph
+    run = current_run_id()
     catalog = load_json(out_path("catalog.json"))
     db_node, tables, columns, refs, joins = build_payload(catalog)
-    print(f">> loading into {gid}: {len(tables)} tables, "
+    # every node carries `run`; keys are (run, name) so the same table name
+    # in different runs are distinct nodes
+    db_node["run"] = run
+    for x in tables + columns:
+        x["run"] = run
+    for x in refs + joins:
+        x["run"] = run
+    print(f">> loading run '{run}' into {gid}: {len(tables)} tables, "
           f"{len(columns)} columns, {len(refs)} FK refs")
 
+    delete_run_namespace(gid, run)
+    print("   cleared previous nodes for this run")
+
     run_query(gid, """
-        MERGE (d:Database {name: $name})
+        MERGE (d:Database {name: $name, run: $run})
         SET d.domain = $domain, d.description = $description
     """, db_node)
 
     for batch in chunks(tables, 50):
         run_query(gid, """
             UNWIND $rows AS r
-            MERGE (t:Table {name: r.name})
+            MERGE (t:Table {name: r.name, run: r.run})
             SET t.description = r.description, t.rowcount = r.rowcount,
                 t.n_columns = r.n_columns, t.pk = r.pk
-            WITH t
-            MATCH (d:Database {name: $db})
+            WITH t, r
+            MATCH (d:Database {name: $db, run: r.run})
             MERGE (d)-[:HAS_TABLE]->(t)
         """, {"rows": batch, "db": db_node["name"]})
     print("   tables done")
@@ -171,13 +253,13 @@ def cmd_load(args):
     for batch in chunks(columns, 50):
         run_query(gid, """
             UNWIND $rows AS r
-            MERGE (c:Column {id: r.id})
+            MERGE (c:Column {id: r.id, run: r.run})
             SET c.name = r.name, c.table = r.table, c.type = r.type,
                 c.nullable = r.nullable, c.is_pk = r.is_pk,
                 c.description = r.description, c.confidence = r.confidence,
                 c.examples = r.examples
             WITH c, r
-            MATCH (t:Table {name: r.table})
+            MATCH (t:Table {name: r.table, run: r.run})
             MERGE (t)-[:HAS_COLUMN]->(c)
         """, {"rows": batch})
     print("   columns done")
@@ -185,14 +267,16 @@ def cmd_load(args):
     for batch in chunks(refs, 50):
         run_query(gid, """
             UNWIND $rows AS r
-            MATCH (a:Column {id: r.from}), (b:Column {id: r.to})
+            MATCH (a:Column {id: r.from, run: r.run}),
+                  (b:Column {id: r.to, run: r.run})
             MERGE (a)-[e:REFERENCES]->(b)
             SET e.source = r.source, e.confidence = r.confidence
         """, {"rows": batch})
     for batch in chunks(joins, 50):
         run_query(gid, """
             UNWIND $rows AS r
-            MATCH (a:Table {name: r.from}), (b:Table {name: r.to})
+            MATCH (a:Table {name: r.from, run: r.run}),
+                  (b:Table {name: r.to, run: r.run})
             MERGE (a)-[e:JOINS_TO {via: r.via}]->(b)
             SET e.source = r.source, e.confidence = r.confidence
         """, {"rows": batch})
@@ -202,11 +286,14 @@ def cmd_load(args):
 
 def cmd_status(args):
     gid = graph_id(args)
+    run = current_run_id()
     out = run_query(gid, """
-        MATCH (n) WITH count(n) AS nodes
-        MATCH ()-[e]->() RETURN nodes, count(e) AS edges
-    """)
-    print(">>", json.dumps(out.get("results", out), ensure_ascii=False))
+        MATCH (n {run: $run}) WITH count(n) AS nodes
+        OPTIONAL MATCH (:Table {run: $run})-[e]->({run: $run})
+        RETURN nodes, count(e) AS edges
+    """, {"run": run})
+    print(f">> run '{run}':", json.dumps(out.get("results", out),
+                                         ensure_ascii=False))
 
 
 def main():

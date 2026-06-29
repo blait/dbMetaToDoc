@@ -144,59 +144,69 @@ def cmd_extract():
 
 def cmd_load():
     import graph as G
-    gid = cfg("NEPTUNE_GRAPH_ID", required=True)
+    gid = G.graph_id(type("A", (), {"graph_id": None})())  # this run's graph
+    if not gid:
+        raise SystemExit("no graph for this run — run `graph.py load` first")
+    run = G.current_run_id()
     data = load_json(out_path("concepts.json"))
     concepts = data["concepts"]
+
+    # clear this run's concept nodes before reloading (idempotent)
+    G.run_query(gid, "MATCH (c:Concept {run: $run}) DETACH DELETE c",
+                {"run": run})
 
     rows = [{"name": c["name"], "name_ko": c["name_ko"],
              "description": c["description"],
              "synonyms": ", ".join(c["synonyms"]),
-             "confidence": float(c.get("confidence") or 0)}
+             "confidence": float(c.get("confidence") or 0), "run": run}
             for c in concepts]
     for batch in G.chunks(rows, 50):
         G.run_query(gid, """
             UNWIND $rows AS r
-            MERGE (c:Concept {name: r.name})
+            MERGE (c:Concept {name: r.name, run: r.run})
             SET c.name_ko = r.name_ko, c.description = r.description,
                 c.synonyms = r.synonyms, c.confidence = r.confidence
         """, {"rows": batch})
 
-    isa = [{"child": c["name"], "parent": c["is_a"]}
+    isa = [{"child": c["name"], "parent": c["is_a"], "run": run}
            for c in concepts if c.get("is_a")]
     if isa:
         G.run_query(gid, """
             UNWIND $rows AS r
-            MATCH (a:Concept {name: r.child}), (b:Concept {name: r.parent})
+            MATCH (a:Concept {name: r.child, run: r.run}),
+                  (b:Concept {name: r.parent, run: r.run})
             MERGE (a)-[:IS_A]->(b)
         """, {"rows": isa})
 
-    t_maps = [{"concept": c["name"], "table": t,
+    t_maps = [{"concept": c["name"], "table": t, "run": run,
                "confidence": float(c.get("confidence") or 0)}
               for c in concepts for t in c["tables"]]
     for batch in G.chunks(t_maps, 50):
         G.run_query(gid, """
             UNWIND $rows AS r
-            MATCH (c:Concept {name: r.concept}), (t:Table {name: r.table})
+            MATCH (c:Concept {name: r.concept, run: r.run}),
+                  (t:Table {name: r.table, run: r.run})
             MERGE (c)-[e:MAPPED_TO]->(t)
             SET e.confidence = r.confidence
         """, {"rows": batch})
 
-    c_maps = [{"concept": c["name"], "col": k,
+    c_maps = [{"concept": c["name"], "col": k, "run": run,
                "confidence": float(c.get("confidence") or 0)}
               for c in concepts for k in c["key_columns"]]
     for batch in G.chunks(c_maps, 50):
         G.run_query(gid, """
             UNWIND $rows AS r
-            MATCH (c:Concept {name: r.concept}), (col:Column {id: r.col})
+            MATCH (c:Concept {name: r.concept, run: r.run}),
+                  (col:Column {id: r.col, run: r.run})
             MERGE (c)-[e:MAPPED_TO]->(col)
             SET e.confidence = r.confidence
         """, {"rows": batch})
 
     out = G.run_query(gid, """
-        MATCH (c:Concept)
+        MATCH (c:Concept {run: $run})
         OPTIONAL MATCH (c)-[m:MAPPED_TO]->()
         RETURN count(DISTINCT c) AS concepts, count(m) AS mappings
-    """)
+    """, {"run": run})
     print(">> loaded:", json.dumps(out.get("results")))
 
 

@@ -47,13 +47,14 @@ def match_concepts(question):
     gid = cfg("NEPTUNE_GRAPH_ID")
     if not gid:
         return {"matched": [], "tables": []}
+    import graph as G
+    run = G.current_run_id()
     try:
-        import graph as G
         rows = G.run_query(gid, """
-            MATCH (c:Concept)
+            MATCH (c:Concept {run: $run})
             RETURN c.name AS name, c.name_ko AS name_ko,
                    c.synonyms AS synonyms
-        """)["results"]
+        """, {"run": run})["results"]
     except Exception:
         return {"matched": [], "tables": []}
 
@@ -75,13 +76,13 @@ def match_concepts(question):
     try:
         res = G.run_query(gid, """
             UNWIND $names AS cn
-            MATCH (c:Concept {name: cn})
-            OPTIONAL MATCH (d:Concept)-[:IS_A*1..3]->(c)
+            MATCH (c:Concept {name: cn, run: $run})
+            OPTIONAL MATCH (d:Concept {run: $run})-[:IS_A*1..3]->(c)
             WITH collect(DISTINCT c) + collect(DISTINCT d) AS cs
             UNWIND cs AS cc
-            MATCH (cc)-[:MAPPED_TO]->(t:Table)
+            MATCH (cc)-[:MAPPED_TO]->(t:Table {run: $run})
             RETURN DISTINCT cc.name AS concept, t.name AS tbl
-        """, {"names": matched})["results"]
+        """, {"names": matched, "run": run})["results"]
     except Exception:
         return {"matched": matched, "tables": []}
     tables, seen = [], set()
@@ -140,30 +141,34 @@ def expand(tables):
 
 def _expand_neptune(gid, tables):
     import graph as G
+    run = G.current_run_id()
     tl = list(tables)
     cols = G.run_query(gid, """
         UNWIND $tbls AS tn
-        MATCH (t:Table {name: tn})-[:HAS_COLUMN]->(c:Column)
+        MATCH (t:Table {name: tn, run: $run})-[:HAS_COLUMN]->(c:Column {run: $run})
         RETURN t.name AS tbl, c.name AS col, c.type AS type,
                c.is_pk AS is_pk, c.description AS description
         ORDER BY tbl, col
-    """, {"tbls": tl})
+    """, {"tbls": tl, "run": run})
+    if not cols["results"]:
+        raise RuntimeError("run not loaded in Neptune")  # → catalog fallback
     fks = G.run_query(gid, """
         UNWIND $tbls AS tn
-        MATCH (a:Table {name: tn})-[e:JOINS_TO]->(b:Table)
+        MATCH (a:Table {name: tn, run: $run})-[e:JOINS_TO]->(b:Table {run: $run})
         RETURN a.name AS frm, b.name AS to, e.via AS via,
                e.source AS source, e.confidence AS confidence
-    """, {"tbls": tl})
+    """, {"tbls": tl, "run": run})
     # shortest join paths between each retrieved table pair
     paths = []
     for i in range(len(tl)):
         for j in range(i + 1, len(tl)):
             p = G.run_query(gid, """
-                MATCH p = (a:Table {name:$a})-[:JOINS_TO*1..4]-(b:Table {name:$b})
+                MATCH p = (a:Table {name:$a, run:$run})
+                          -[:JOINS_TO*1..4]-(b:Table {name:$b, run:$run})
                 RETURN [n IN nodes(p) | n.name] AS names,
                        [e IN relationships(p) | e.via] AS vias
                 ORDER BY size(vias) ASC LIMIT 6
-            """, {"a": tl[i], "b": tl[j]})
+            """, {"a": tl[i], "b": tl[j], "run": run})
             for row in p["results"]:
                 if len(set(row["names"])) == len(row["names"]):
                     paths.append({"tables": row["names"], "vias": row["vias"]})

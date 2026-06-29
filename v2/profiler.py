@@ -13,7 +13,7 @@ Writes out/profile.json.
 """
 import sys
 
-from config import connect, PGSCHEMA, out_path, dump_json, qident
+from config import connect, PGSCHEMA, out_path, dump_json, qident, cfg
 
 SAMPLE_ROWS = 1000        # cap for value-level sampling
 TOPK = 10                 # most frequent values kept per column
@@ -39,6 +39,35 @@ def fetch_columns(cur, table):
     return [dict(name=r[0], data_type=r[1], nullable=(r[2] == "YES"),
                  position=r[3], char_max_len=r[4], num_precision=r[5])
             for r in cur.fetchall()]
+
+
+def fetch_comments(cur, table):
+    """Existing table/column COMMENTs (customer DBs often have them).
+
+    Used as an EXTRA hint for description inference and surfaced with a
+    'existing comment' provenance. Disabled in eval mode (V2_USE_COMMENTS=0)
+    so the OMOP benchmark stays blind. Returns (table_comment, {col: comment}).
+    """
+    if cfg("V2_USE_COMMENTS", "1") not in ("1", "true", "True"):
+        return None, {}
+    rel = f"{PGSCHEMA}.{table}"
+    tbl_comment = None
+    col_comments = {}
+    try:
+        cur.execute("SELECT obj_description(%s::regclass, 'pg_class')", (rel,))
+        row = cur.fetchone()
+        tbl_comment = row[0] if row else None
+        cur.execute(
+            """SELECT a.attname, col_description(a.attrelid, a.attnum)
+               FROM pg_attribute a
+               WHERE a.attrelid = %s::regclass AND a.attnum > 0
+                 AND NOT a.attisdropped""", (rel,))
+        for name, comment in cur.fetchall():
+            if comment:
+                col_comments[name] = comment
+    except Exception:
+        return None, {}
+    return tbl_comment, col_comments
 
 
 def bulk_stats(cur, table, cols, rowcount):
@@ -154,9 +183,13 @@ def main():
                     st["is_enum_candidate"] = False
                 st["examples"] = [tv["value"] for tv in st["top_values"][:5]]
             keys = candidate_keys(cur, t, cols, stats, rc)
+            tbl_comment, col_comments = fetch_comments(cur, t)
             profile["tables"][t] = {
                 "rowcount": rc,
-                "columns": [{**c, "stats": stats[c["name"]]} for c in cols],
+                "table_comment": tbl_comment,
+                "columns": [{**c, "stats": stats[c["name"]],
+                             "existing_comment": col_comments.get(c["name"])}
+                            for c in cols],
                 "keys": keys,
             }
             print(f"   {t:<28} rows={rc:<8} cols={len(cols):<3} "

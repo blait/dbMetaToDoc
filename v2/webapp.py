@@ -119,6 +119,10 @@ def launch_pipeline(rid, conn: ConnectionIn):
         "PGHOST": conn.host, "PGPORT": str(conn.port),
         "PGDATABASE": conn.dbname, "PGUSER": conn.user,
         "PGPASSWORD": conn.password, "PGSCHEMA": conn.schema_name,
+        # Customer mode (default): use existing COMMENTs as hints.
+        # Eval mode (with_truth): stay blind — ignore any leftover comments
+        # so the OMOP benchmark measures pure inference.
+        "V2_USE_COMMENTS": "0" if conn.with_truth else "1",
     })
     cmd = [sys.executable, os.path.join(HERE, "run.py")]
     if not conn.with_truth:
@@ -220,8 +224,19 @@ def delete_run(rid: str):
     d = run_dir(rid)
     if not os.path.exists(d):
         raise HTTPException(404)
+    # delete this run's dedicated Neptune graph too (per-graph billing!)
+    meta = read_meta(rid) or {}
+    gid = meta.get("graph_id")
+    graph_deleted = None
+    if gid:
+        try:
+            import graph as G
+            G.client().delete_graph(graphIdentifier=gid, skipSnapshot=True)
+            graph_deleted = gid
+        except Exception as e:
+            graph_deleted = f"failed: {e}"
     shutil.rmtree(d)
-    return {"ok": True}
+    return {"ok": True, "graph_deleted": graph_deleted}
 
 
 # ------------------------------------------------------------------ graph
@@ -251,35 +266,42 @@ def graph_payload_from_catalog(catalog):
     return tables, joins
 
 
-def neptune_gid():
-    return os.environ.get("NEPTUNE_GRAPH_ID")
+def neptune_gid(rid):
+    """This run's dedicated graph id (stored in its meta.json)."""
+    meta = read_meta(rid) or {}
+    return meta.get("graph_id") or os.environ.get("NEPTUNE_GRAPH_ID")
 
 
-def neptune_query(query, parameters=None):
+def neptune_query(gid, query, parameters=None):
     import graph as G
-    return G.run_query(neptune_gid(), query, parameters)
+    return G.run_query(gid, query, parameters)
 
 
 @app.get("/api/runs/{rid}/graph")
 def get_graph(rid: str):
-    """Graph for visualization. Prefers Neptune; falls back to catalog."""
-    gid = neptune_gid()
+    """Graph for visualization, scoped to THIS run. Prefers Neptune (run-
+    namespaced nodes), falls back to the run's catalog.json."""
+    gid = neptune_gid(rid)
     if gid:
         try:
-            t = neptune_query("""
-                MATCH (t:Table) RETURN t.name AS name, t.rowcount AS rowcount,
+            t = neptune_query(gid, """
+                MATCH (t:Table {run: $rid})
+                RETURN t.name AS name, t.rowcount AS rowcount,
                        t.n_columns AS n_columns, t.pk AS pk,
-                       t.description AS description ORDER BY name""")
-            j = neptune_query("""
-                MATCH (a:Table)-[e:JOINS_TO]->(b:Table)
-                RETURN a.name AS frm, b.name AS to, e.via AS via,
-                       e.source AS source, e.confidence AS confidence""")
-            return {"source": "neptune", "graph_id": gid,
-                    "tables": t["results"],
-                    "joins": [{"from": x["frm"], "to": x["to"],
-                               "via": x["via"], "source": x["source"],
-                               "confidence": x["confidence"]}
-                              for x in j["results"]]}
+                       t.description AS description ORDER BY name""",
+                {"rid": rid})
+            if t["results"]:        # this run is loaded in Neptune
+                j = neptune_query(gid, """
+                    MATCH (a:Table {run: $rid})-[e:JOINS_TO]->(b:Table {run: $rid})
+                    RETURN a.name AS frm, b.name AS to, e.via AS via,
+                           e.source AS source, e.confidence AS confidence""",
+                    {"rid": rid})
+                return {"source": "neptune", "graph_id": gid,
+                        "tables": t["results"],
+                        "joins": [{"from": x["frm"], "to": x["to"],
+                                   "via": x["via"], "source": x["source"],
+                                   "confidence": x["confidence"]}
+                                  for x in j["results"]]}
         except Exception:
             pass  # fall through to local
     tables, joins = graph_payload_from_catalog(load_catalog(rid))
@@ -309,30 +331,33 @@ def get_join_paths(rid: str, frm: str, to: str, max_hops: int = 5, k: int = 3):
     """K shortest join paths between two tables — the text2sql planning
     primitive. Neptune openCypher when configured, local BFS fallback.
     Returns paths as alternating [{table},{via},...] lists."""
-    gid = neptune_gid()
+    gid = neptune_gid(rid)
     if gid:
         try:
             # Neptune Analytics openCypher: no shortestPath()/reduce()-dedup,
             # so over-fetch ordered by length and keep simple paths here.
-            res = neptune_query(f"""
-                MATCH p = (a:Table {{name: $frm}})-[:JOINS_TO*1..{max_hops}]-(b:Table {{name: $to}})
+            res = neptune_query(gid, f"""
+                MATCH p = (a:Table {{name: $frm, run: $rid}})
+                          -[:JOINS_TO*1..{max_hops}]-
+                          (b:Table {{name: $to, run: $rid}})
                 RETURN [n IN nodes(p) | n.name] AS names,
                        [e IN relationships(p) | e.via] AS vias
                 ORDER BY size(vias) ASC LIMIT 40
-            """, {"frm": frm, "to": to})
-            paths = []
-            for row in res["results"]:
-                if len(set(row["names"])) != len(row["names"]):
-                    continue  # drop paths revisiting a table
-                seq = []
-                for i, n in enumerate(row["names"]):
-                    seq.append({"table": n})
-                    if i < len(row["vias"]):
-                        seq.append({"via": row["vias"][i]})
-                paths.append(seq)
-                if len(paths) >= k:
-                    break
-            return {"source": "neptune", "paths": paths}
+            """, {"frm": frm, "to": to, "rid": rid})
+            if res["results"]:
+                paths = []
+                for row in res["results"]:
+                    if len(set(row["names"])) != len(row["names"]):
+                        continue  # drop paths revisiting a table
+                    seq = []
+                    for i, n in enumerate(row["names"]):
+                        seq.append({"table": n})
+                        if i < len(row["vias"]):
+                            seq.append({"via": row["vias"][i]})
+                    paths.append(seq)
+                    if len(paths) >= k:
+                        break
+                return {"source": "neptune", "paths": paths}
         except Exception:
             pass
     # local BFS over the undirected join graph (k shortest, simple paths)
@@ -363,24 +388,25 @@ def get_join_paths(rid: str, frm: str, to: str, max_hops: int = 5, k: int = 3):
 def get_concepts(rid: str):
     """Concept (ontology) layer: prefers Neptune, falls back to the run's
     concepts.json. Returns concepts + IS_A edges + table mappings."""
-    gid = neptune_gid()
+    gid = neptune_gid(rid)
     if gid:
         try:
-            c = neptune_query("""
-                MATCH (c:Concept) RETURN c.name AS name, c.name_ko AS name_ko,
+            c = neptune_query(gid, """
+                MATCH (c:Concept {run: $rid})
+                RETURN c.name AS name, c.name_ko AS name_ko,
                        c.description AS description, c.synonyms AS synonyms,
-                       c.confidence AS confidence ORDER BY name""")
+                       c.confidence AS confidence ORDER BY name""", {"rid": rid})
             if c["results"]:
-                isa = neptune_query("""
-                    MATCH (a:Concept)-[:IS_A]->(b:Concept)
-                    RETURN a.name AS child, b.name AS parent""")
-                maps = neptune_query("""
-                    MATCH (c:Concept)-[m:MAPPED_TO]->(t:Table)
+                isa = neptune_query(gid, """
+                    MATCH (a:Concept {run: $rid})-[:IS_A]->(b:Concept {run: $rid})
+                    RETURN a.name AS child, b.name AS parent""", {"rid": rid})
+                maps = neptune_query(gid, """
+                    MATCH (c:Concept {run: $rid})-[m:MAPPED_TO]->(t:Table {run: $rid})
                     RETURN c.name AS concept, t.name AS tbl,
-                           m.confidence AS confidence""")
-                colmaps = neptune_query("""
-                    MATCH (c:Concept)-[:MAPPED_TO]->(col:Column)
-                    RETURN c.name AS concept, col.id AS col""")
+                           m.confidence AS confidence""", {"rid": rid})
+                colmaps = neptune_query(gid, """
+                    MATCH (c:Concept {run: $rid})-[:MAPPED_TO]->(col:Column {run: $rid})
+                    RETURN c.name AS concept, col.id AS col""", {"rid": rid})
                 cols_by = {}
                 for x in colmaps["results"]:
                     cols_by.setdefault(x["concept"], []).append(x["col"])

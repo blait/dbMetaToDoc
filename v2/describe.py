@@ -50,6 +50,10 @@ SYSTEM = (
     "resolved code labels. An FK tells you what a column points to — say it.\n"
     "- If `resolved_codes` is present for a column, the code meanings ARE "
     "data-evidenced: state what the codes represent.\n"
+    "- If `existing_comment` / `existing_table_comment` is present, it is a "
+    "human-written comment already in the database — treat it as a strong "
+    "hint and reconcile it with the data, but verify against the evidence "
+    "rather than copying blindly (comments can be stale).\n"
     "- Low-cardinality columns are likely codes/enums; explain what they "
     "encode, but do NOT invent specific label mappings that are not given.\n"
     "- Never invent table or column names. Never state unsupported facts.\n"
@@ -230,6 +234,8 @@ def compact_columns(table, tinfo, resolved):
         rc = resolved.get((table, c["name"]))
         if rc:
             item["resolved_codes"] = rc
+        if c.get("existing_comment"):
+            item["existing_comment"] = c["existing_comment"]
         out.append(item)
     return out
 
@@ -252,6 +258,8 @@ def describe_table(table, tinfo, relations, neighbours, resolved,
         "neighbour_table_descriptions": neighbours,
         "columns": compact_columns(table, tinfo, resolved),
     }
+    if tinfo.get("table_comment"):
+        prompt["existing_table_comment"] = tinfo["table_comment"]
     if prior_issues:
         prompt["consistency_issues_found_in_review"] = prior_issues
         prompt["task"] = ("Your previous descriptions of this table had the "
