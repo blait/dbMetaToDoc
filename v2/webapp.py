@@ -4,28 +4,25 @@
     ../.venv/bin/uvicorn webapp:app --port 8200
     open http://localhost:8200
 
+Storage: the MySQL metastore is the single source of truth. The pipeline runs
+in-process (a background thread, chaining stages in memory) and persists ONLY
+to MySQL (catalog/descriptions/concepts) + Neptune (schema graph) + OpenSearch
+(metadata RAG). No per-run JSON artifacts are written to disk.
+
 Pages
   /                  home: past runs (click into results) + "connect new DB"
   /runs/{run_id}     detail: tree catalog + similarity view (ui.py template)
 
 API
   GET  /api/runs                      run list with status + headline scores
-  POST /api/runs                      create a run (DB connection params) and
-                                      launch the pipeline in the background
+  POST /api/runs                      create a run and launch the pipeline
   POST /api/test-connection           validate connection params
-  GET  /api/runs/{id}                 run status + log tail
-  GET  /api/runs/{id}/artifact/{name} catalog.json / score.json / ...
-  DELETE /api/runs/{id}               remove a run directory
-
-Each run executes run.py with V2_OUT_DIR=runs/<id> and PG* env overrides, so
-artifacts stay per-run. Scoring (stage 5) only runs for OMOP-truth runs —
-arbitrary customer DBs have no ground truth, so they get catalog-only runs.
+  GET  /api/runs/{id}                 run status
+  GET  /api/runs/{id}/artifact/{name} catalog (from DB)
+  DELETE /api/runs/{id}               remove a run (+ its Neptune graph)
 """
-import json
 import os
 import re
-import subprocess
-import sys
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -39,15 +36,22 @@ from ui import render_fetching
 from graph_ui import render_graph_page
 from home_ui import HOME
 from t2sql_ui import render_t2sql_page
+from store import db as sdb, repo as srepo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-RUNS_DIR = os.path.join(HERE, "runs")
-os.makedirs(RUNS_DIR, exist_ok=True)
-
-ARTIFACTS = {"catalog.json", "score.json", "score_details.json",
-             "profile.json", "relations.json", "descriptions.json"}
 
 app = FastAPI(title="db2doc v2")
+
+# pipeline runs in-process; serialize so concurrent runs don't thrash Bedrock /
+# the single target connection. Each run still gets its own metastore row.
+_run_lock = threading.Lock()
+
+
+def _require_store():
+    if not sdb.enabled():
+        raise HTTPException(503, "metastore not configured (set METASTORE_* "
+                                 "in .env) — this build stores results in MySQL")
+    sdb.init_db()
 
 
 # ------------------------------------------------------------------ models
@@ -63,82 +67,43 @@ class ConnectionIn(BaseModel):
     no_judge: bool = False
 
 
-# ------------------------------------------------------------------ helpers
-def run_dir(run_id):
-    if not re.fullmatch(r"[a-z0-9\-]+", run_id):
-        raise HTTPException(400, "bad run id")
-    return os.path.join(RUNS_DIR, run_id)
-
-
-def read_meta(rid):
-    p = os.path.join(run_dir(rid), "meta.json")
-    if not os.path.exists(p):
-        return None
-    with open(p) as f:
-        return json.load(f)
-
-
-def write_meta(rid, meta):
-    with open(os.path.join(run_dir(rid), "meta.json"), "w") as f:
-        json.dump(meta, f, indent=2, ensure_ascii=False)
-
-
-def headline(rid):
-    """Pull headline numbers from a finished run's artifacts."""
-    d = run_dir(rid)
-    out = {}
-    sp = os.path.join(d, "score.json")
-    if os.path.exists(sp):
-        with open(sp) as f:
-            s = json.load(f)
-        dm = s.get("description_match", {})
-        out["col_judge"] = dm.get("column", {}).get("judge_accuracy")
-        out["tbl_judge"] = dm.get("table", {}).get("judge_accuracy")
-        out["pk_f1"] = s.get("relations", {}).get("primary_key_f1", {}).get("f1")
-        out["fk_f1"] = s.get("relations", {}).get("foreign_key_f1", {}).get("f1")
-        out["s_overall"] = s.get("Soverall")
-        out["judge_model"] = (s.get("scoring_methods", {})
-                              .get("judge_accuracy", {}).get("model"))
-    cp = os.path.join(d, "catalog.json")
-    if os.path.exists(cp):
-        with open(cp) as f:
-            c = json.load(f)
-        out["tables"] = len(c.get("tables", []))
-        out["columns"] = sum(len(t["columns"]) for t in c.get("tables", []))
-        out["domain"] = c.get("database", {}).get("domain")
-        out["gen_model"] = c.get("model")
-    return out
-
-
+# ------------------------------------------------------------------ pipeline
 def launch_pipeline(rid, conn: ConnectionIn):
-    """Run run.py as a subprocess with per-run env; track status in meta."""
-    d = run_dir(rid)
-    env = dict(os.environ)
-    env.update({
-        "V2_OUT_DIR": d,
-        "PGHOST": conn.host, "PGPORT": str(conn.port),
-        "PGDATABASE": conn.dbname, "PGUSER": conn.user,
-        "PGPASSWORD": conn.password, "PGSCHEMA": conn.schema_name,
-        # Customer mode (default): use existing COMMENTs as hints.
-        # Eval mode (with_truth): stay blind — ignore any leftover comments
-        # so the OMOP benchmark measures pure inference.
-        "V2_USE_COMMENTS": "0" if conn.with_truth else "1",
-    })
-    cmd = [sys.executable, os.path.join(HERE, "run.py")]
-    if not conn.with_truth:
-        cmd.append("--skip-score")
-    elif conn.no_judge:
-        cmd.append("--no-judge")
-    log_path = os.path.join(d, "pipeline.log")
-
+    """Run the in-memory pipeline in a background thread with per-run env."""
     def worker():
-        meta = read_meta(rid)
-        with open(log_path, "w") as log:
-            p = subprocess.run(cmd, cwd=HERE, env=env,
-                               stdout=log, stderr=subprocess.STDOUT)
-        meta["status"] = "done" if p.returncode == 0 else "failed"
-        meta["finished_at"] = datetime.now(timezone.utc).isoformat()
-        write_meta(rid, meta)
+        with _run_lock:
+            env_keys = ("PGHOST", "PGPORT", "PGDATABASE", "PGUSER",
+                        "PGPASSWORD", "PGSCHEMA", "V2_USE_COMMENTS")
+            saved = {k: os.environ.get(k) for k in env_keys}
+            os.environ.update({
+                "PGHOST": conn.host, "PGPORT": str(conn.port),
+                "PGDATABASE": conn.dbname, "PGUSER": conn.user,
+                "PGPASSWORD": conn.password, "PGSCHEMA": conn.schema_name,
+                # Customer mode (default): use existing COMMENTs as hints.
+                # Eval mode (with_truth): stay blind so the OMOP benchmark
+                # measures pure inference.
+                "V2_USE_COMMENTS": "0" if conn.with_truth else "1",
+            })
+            try:
+                import importlib
+                import config as _cfg
+                importlib.reload(_cfg)        # pick up the env override
+                import pipeline
+                importlib.reload(pipeline)
+                pipeline.run_pipeline(
+                    rid, name=conn.name or f"{conn.dbname}@{conn.host}",
+                    with_truth=conn.with_truth,
+                    meta_extra={"host": conn.host, "port": conn.port,
+                                "dbname": conn.dbname})
+            except Exception as e:
+                srepo.set_status(rid, "failed", error=str(e)[:2000])
+                print(f"[pipeline] run {rid} failed: {e}")
+            finally:
+                for k, v in saved.items():
+                    if v is None:
+                        os.environ.pop(k, None)
+                    else:
+                        os.environ[k] = v
 
     threading.Thread(target=worker, daemon=True).start()
 
@@ -165,18 +130,14 @@ def test_connection(conn: ConnectionIn):
 
 @app.post("/api/runs")
 def create_run(conn: ConnectionIn):
+    _require_store()
     rid = (datetime.now().strftime("%Y%m%d-%H%M%S") + "-"
            + uuid.uuid4().hex[:6])
-    d = os.path.join(RUNS_DIR, rid)
-    os.makedirs(d)
-    write_meta(rid, {
-        "id": rid,
+    srepo.create_run(rid, {
         "name": conn.name or f"{conn.dbname}@{conn.host}",
         "host": conn.host, "port": conn.port, "dbname": conn.dbname,
-        "schema": conn.schema_name, "user": conn.user,
-        "with_truth": conn.with_truth,
+        "schema": conn.schema_name, "with_truth": conn.with_truth,
         "status": "running",
-        "created_at": datetime.now(timezone.utc).isoformat(),
     })
     launch_pipeline(rid, conn)
     return {"id": rid}
@@ -184,48 +145,63 @@ def create_run(conn: ConnectionIn):
 
 @app.get("/api/runs")
 def list_runs():
-    runs = []
-    for rid in sorted(os.listdir(RUNS_DIR), reverse=True):
-        meta = read_meta(rid)
-        if meta:
-            meta["headline"] = headline(rid)
-            meta.pop("password", None)
-            runs.append(meta)
-    return {"runs": runs}
+    _require_store()
+    return {"runs": srepo.list_runs()}
 
 
 @app.get("/api/runs/{rid}")
 def get_run(rid: str):
-    meta = read_meta(rid)
+    _require_store()
+    meta = srepo.get_run(rid)
     if not meta:
         raise HTTPException(404)
-    meta["headline"] = headline(rid)
-    log_path = os.path.join(run_dir(rid), "pipeline.log")
-    if os.path.exists(log_path):
-        with open(log_path) as f:
-            meta["log_tail"] = f.readlines()[-30:]
     return meta
 
 
 @app.get("/api/runs/{rid}/artifact/{name}")
 def get_artifact(rid: str, name: str):
-    if name not in ARTIFACTS:
+    """The viewer fetches 'catalog.json'; we serve it from the metastore.
+    Score artifacts are not part of the DB-only customer flow."""
+    _require_store()
+    if name == "catalog.json":
+        cat = srepo.load_run(rid)
+        if not cat:
+            raise HTTPException(404)
+        return cat
+    if name in ("score.json", "score_details.json"):
+        return JSONResponse(None)     # no ground-truth scoring in DB-only flow
+    raise HTTPException(404)
+
+
+class DescEdit(BaseModel):
+    table: str
+    column: str | None = None          # None → table-level description
+    description: str
+
+
+@app.patch("/api/runs/{rid}/catalog/description")
+def edit_description(rid: str, e: DescEdit):
+    """Human review: overwrite a generated description, keep the AI original,
+    and append an audit row — all in the metastore."""
+    _require_store()
+    if not srepo.get_run(rid):
         raise HTTPException(404)
-    p = os.path.join(run_dir(rid), name)
-    if not os.path.exists(p):
+    try:
+        srepo.edit_description(rid, e.table, e.column, e.description)
+    except KeyError:
         raise HTTPException(404)
-    with open(p) as f:
-        return json.load(f)
+    target = ("__db__" if e.table == "__db__"
+              else f"{e.table}.{e.column}" if e.column else e.table)
+    return {"ok": True, "target": target, "description": e.description}
 
 
 @app.delete("/api/runs/{rid}")
 def delete_run(rid: str):
-    import shutil
-    d = run_dir(rid)
-    if not os.path.exists(d):
+    _require_store()
+    meta = srepo.get_run(rid)
+    if not meta:
         raise HTTPException(404)
     # delete this run's dedicated Neptune graph too (per-graph billing!)
-    meta = read_meta(rid) or {}
     gid = meta.get("graph_id")
     graph_deleted = None
     if gid:
@@ -235,17 +211,16 @@ def delete_run(rid: str):
             graph_deleted = gid
         except Exception as e:
             graph_deleted = f"failed: {e}"
-    shutil.rmtree(d)
+    srepo.delete_run(rid)
     return {"ok": True, "graph_deleted": graph_deleted}
 
 
 # ------------------------------------------------------------------ graph
 def load_catalog(rid):
-    p = os.path.join(run_dir(rid), "catalog.json")
-    if not os.path.exists(p):
-        raise HTTPException(404, "catalog.json not ready")
-    with open(p) as f:
-        return json.load(f)
+    cat = srepo.load_run(rid)
+    if not cat:
+        raise HTTPException(404, "catalog not ready")
+    return cat
 
 
 def graph_payload_from_catalog(catalog):
@@ -267,9 +242,8 @@ def graph_payload_from_catalog(catalog):
 
 
 def neptune_gid(rid):
-    """This run's dedicated graph id (stored in its meta.json)."""
-    meta = read_meta(rid) or {}
-    return meta.get("graph_id") or os.environ.get("NEPTUNE_GRAPH_ID")
+    """This run's dedicated graph id (from the metastore)."""
+    return srepo.run_graph_id(rid) or os.environ.get("NEPTUNE_GRAPH_ID")
 
 
 def neptune_query(gid, query, parameters=None):
@@ -280,7 +254,8 @@ def neptune_query(gid, query, parameters=None):
 @app.get("/api/runs/{rid}/graph")
 def get_graph(rid: str):
     """Graph for visualization, scoped to THIS run. Prefers Neptune (run-
-    namespaced nodes), falls back to the run's catalog.json."""
+    namespaced nodes), falls back to the metastore catalog."""
+    _require_store()
     gid = neptune_gid(rid)
     if gid:
         try:
@@ -311,6 +286,7 @@ def get_graph(rid: str):
 
 @app.get("/api/runs/{rid}/graph/table/{name}")
 def get_graph_table(rid: str, name: str):
+    _require_store()
     catalog = load_catalog(rid)
     t = next((x for x in catalog["tables"] if x["name"] == name), None)
     if not t:
@@ -331,6 +307,7 @@ def get_join_paths(rid: str, frm: str, to: str, max_hops: int = 5, k: int = 3):
     """K shortest join paths between two tables — the text2sql planning
     primitive. Neptune openCypher when configured, local BFS fallback.
     Returns paths as alternating [{table},{via},...] lists."""
+    _require_store()
     gid = neptune_gid(rid)
     if gid:
         try:
@@ -386,8 +363,9 @@ def get_join_paths(rid: str, frm: str, to: str, max_hops: int = 5, k: int = 3):
 
 @app.get("/api/runs/{rid}/graph/concepts")
 def get_concepts(rid: str):
-    """Concept (ontology) layer: prefers Neptune, falls back to the run's
-    concepts.json. Returns concepts + IS_A edges + table mappings."""
+    """Concept (ontology) layer: prefers Neptune, falls back to the metastore.
+    Returns concepts + IS_A edges + table mappings."""
+    _require_store()
     gid = neptune_gid(rid)
     if gid:
         try:
@@ -421,45 +399,30 @@ def get_concepts(rid: str):
                                      for m in maps["results"]]}
         except Exception:
             pass
-    p = os.path.join(run_dir(rid), "concepts.json")
-    if not os.path.exists(p):
+    data = srepo.load_concepts(rid)
+    if not data or not data["concepts"]:
         return {"source": "none", "concepts": [], "is_a": [], "mappings": []}
-    with open(p) as f:
-        data = json.load(f)
-    concepts, isa, maps = [], [], []
-    for c in data["concepts"]:
-        concepts.append({"name": c["name"], "name_ko": c["name_ko"],
-                         "description": c["description"],
-                         "synonyms": ", ".join(c["synonyms"]),
-                         "confidence": c.get("confidence"),
-                         "key_columns": c.get("key_columns", [])})
-        if c.get("is_a"):
-            isa.append({"child": c["name"], "parent": c["is_a"]})
-        for t in c["tables"]:
-            maps.append({"concept": c["name"], "table": t,
-                         "confidence": c.get("confidence")})
-    return {"source": "local", "concepts": concepts, "is_a": isa,
-            "mappings": maps}
+    return {"source": "metastore", **data}
 
 
 # ------------------------------------------------------------------ pages
 @app.get("/runs/{rid}", response_class=HTMLResponse)
 def run_page(rid: str):
-    if not read_meta(rid):
+    if not srepo.get_run(rid):
         raise HTTPException(404)
     return render_fetching(rid)
 
 
 @app.get("/runs/{rid}/graph", response_class=HTMLResponse)
 def graph_page(rid: str):
-    if not read_meta(rid):
+    if not srepo.get_run(rid):
         raise HTTPException(404)
     return render_graph_page(rid)
 
 
 @app.get("/runs/{rid}/text2sql", response_class=HTMLResponse)
 def t2sql_page(rid: str):
-    if not read_meta(rid):
+    if not srepo.get_run(rid):
         raise HTTPException(404)
     return render_t2sql_page(rid)
 
@@ -468,28 +431,10 @@ class QuestionIn(BaseModel):
     question: str
 
 
-def _t2sql_history_path(rid):
-    return os.path.join(run_dir(rid), "t2sql_history.json")
-
-
-def _append_history(rid, entry):
-    path = _t2sql_history_path(rid)
-    hist = []
-    if os.path.exists(path):
-        try:
-            with open(path) as f:
-                hist = json.load(f)
-        except Exception:
-            hist = []
-    hist.insert(0, entry)          # newest first
-    hist = hist[:100]              # cap
-    with open(path, "w") as f:
-        json.dump(hist, f, ensure_ascii=False, indent=2)
-
-
 @app.post("/api/runs/{rid}/text2sql")
 def run_t2sql(rid: str, q: QuestionIn):
-    if not read_meta(rid):
+    _require_store()
+    if not srepo.get_run(rid):
         raise HTTPException(404)
     import text2sql
     try:
@@ -501,7 +446,7 @@ def run_t2sql(rid: str, q: QuestionIn):
     exec_step = next((s for s in reversed(out.get("steps", []))
                       if s["step"] == "execute"), None)
     ed = exec_step["data"] if exec_step else {}
-    _append_history(rid, {
+    srepo.add_t2sql_history(rid, {
         "ts": datetime.now(timezone.utc).isoformat(),
         "question": q.question,
         "ok": bool(res.get("ok")),
@@ -515,22 +460,18 @@ def run_t2sql(rid: str, q: QuestionIn):
 
 @app.get("/api/runs/{rid}/text2sql/history")
 def t2sql_history(rid: str):
-    if not read_meta(rid):
+    _require_store()
+    if not srepo.get_run(rid):
         raise HTTPException(404)
-    path = _t2sql_history_path(rid)
-    if not os.path.exists(path):
-        return {"history": []}
-    with open(path) as f:
-        return {"history": json.load(f)}
+    return {"history": srepo.get_t2sql_history(rid)}
 
 
 @app.delete("/api/runs/{rid}/text2sql/history")
 def t2sql_history_clear(rid: str):
-    if not read_meta(rid):
+    _require_store()
+    if not srepo.get_run(rid):
         raise HTTPException(404)
-    path = _t2sql_history_path(rid)
-    if os.path.exists(path):
-        os.remove(path)
+    srepo.clear_t2sql_history(rid)
     return {"ok": True}
 
 

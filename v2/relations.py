@@ -418,12 +418,12 @@ def declared_fks(cur):
             for r in cur.fetchall()]
 
 
-def main():
-    use_llm = "--no-llm" not in sys.argv
-    profile = load_json(out_path("profile.json"))
-    conn = connect()
-    conn.autocommit = True
-
+def recover_relations(profile, conn=None, use_llm=True):
+    """Recover PK/FK from profile + DB and return the relations dict."""
+    own = conn is None
+    if own:
+        conn = connect()
+        conn.autocommit = True
     with conn.cursor() as cur:
         # PKs: declared wins, then statistical/composite/name
         pks, unique_keys = detect_pks(profile)
@@ -443,7 +443,6 @@ def main():
             if (nf["child_table"], nf["child_column"]) not in covered:
                 fks.append(nf)
                 covered.add((nf["child_table"], nf["child_column"]))
-        n_before_llm = len(fks)
         if use_llm:
             cands = llm_fk_candidates(profile, pks, covered)
             cands = verify_llm_candidates(cur, profile, cands)
@@ -452,15 +451,21 @@ def main():
                   f"(value-verified where measurable)")
         fks = merge_best_parent(fks)
         fks = fanout_penalty(fks)
-
-    conn.close()
-    out = {"primary_keys": pks, "unique_keys": unique_keys,
-           "foreign_keys": fks}
-    dump_json(out, out_path("relations.json"))
+    if own:
+        conn.close()
     by_src = {}
     for f in fks:
         by_src[f["source"]] = by_src.get(f["source"], 0) + 1
-    print(f">> FKs: {len(fks)} by source {by_src} -> out/relations.json")
+    print(f">> FKs: {len(fks)} by source {by_src}")
+    return {"primary_keys": pks, "unique_keys": unique_keys,
+            "foreign_keys": fks}
+
+
+def main():
+    use_llm = "--no-llm" not in sys.argv
+    profile = load_json(out_path("profile.json"))
+    out = recover_relations(profile, use_llm=use_llm)
+    dump_json(out, out_path("relations.json"))
 
 
 if __name__ == "__main__":

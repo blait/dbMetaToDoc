@@ -34,8 +34,20 @@ MAX_REPAIRS = 2
 ROW_LIMIT = 50
 
 
+# --------------------------------------------------------------- run context
+def _gid(rid):
+    """This run's dedicated Neptune graph id, from the metastore."""
+    try:
+        from store import db as sdb, repo as srepo
+        if sdb.enabled():
+            return srepo.run_graph_id(rid)
+    except Exception:
+        pass
+    return cfg("NEPTUNE_GRAPH_ID")   # legacy fallback
+
+
 # ------------------------------------------------------------- concept layer
-def match_concepts(question):
+def match_concepts(question, rid):
     """Ontology path: match question terms to Concept nodes (by name/Korean
     name/synonym), expand IS_A children, and return the tables they MAP_TO.
 
@@ -44,11 +56,11 @@ def match_concepts(question):
     that semantic search over individual columns would miss, and it uses the
     curated synonyms. Returns {} (no-op) if Neptune/concepts are unavailable.
     """
-    gid = cfg("NEPTUNE_GRAPH_ID")
+    gid = _gid(rid)
     if not gid:
         return {"matched": [], "tables": []}
     import graph as G
-    run = G.current_run_id()
+    run = rid
     try:
         rows = G.run_query(gid, """
             MATCH (c:Concept {run: $run})
@@ -96,14 +108,14 @@ def match_concepts(question):
 
 
 # ----------------------------------------------------------------- retrieve
-def retrieve(question, k=14):
+def retrieve(question, rid, k=14):
     """Hybrid metadata RAG: semantic vector search (OpenSearch) UNION
     ontology concept matching (Neptune). Vector search finds columns by
     meaning; the concept layer adds tables reachable through matched
     business terms and their IS_A hierarchy. Vector hits lead (ranked),
     concept-only tables are appended."""
     import metasearch
-    hits = metasearch.search(question, k=k)
+    hits = metasearch.search(question, k=k, rid=rid)
     tables, seen = [], set()
     for h in hits:
         t = h["table"]
@@ -111,7 +123,7 @@ def retrieve(question, k=14):
             seen.add(t)
             tables.append(t)
 
-    concepts = match_concepts(question)
+    concepts = match_concepts(question, rid)
     concept_added = []
     for t in concepts.get("tables", []):
         if t not in seen:
@@ -126,22 +138,21 @@ def retrieve(question, k=14):
 
 
 # ----------------------------------------------------------------- expand
-def expand(tables):
+def expand(tables, rid):
     """Graph RAG: pull keys, FK edges, and pairwise shortest join paths from
-    Neptune for the retrieved tables. Falls back to catalog.json if Neptune
-    is unset."""
-    gid = cfg("NEPTUNE_GRAPH_ID")
+    Neptune for the retrieved tables. Falls back to the metastore catalog if
+    Neptune is unset."""
+    gid = _gid(rid)
     if gid and tables:
         try:
-            return _expand_neptune(gid, tables)
+            return _expand_neptune(gid, tables, rid)
         except Exception:
             pass
-    return _expand_catalog(tables)
+    return _expand_catalog(tables, rid)
 
 
-def _expand_neptune(gid, tables):
+def _expand_neptune(gid, tables, run):
     import graph as G
-    run = G.current_run_id()
     tl = list(tables)
     cols = G.run_query(gid, """
         UNWIND $tbls AS tn
@@ -180,9 +191,11 @@ def _expand_neptune(gid, tables):
             "paths": paths, "source": "neptune"}
 
 
-def _expand_catalog(tables):
-    from config import load_json, out_path
-    cat = load_json(out_path("catalog.json"))
+def _expand_catalog(tables, rid):
+    from store import repo as srepo
+    cat = srepo.load_run(rid)
+    if not cat:
+        return {"columns": [], "fks": [], "paths": [], "source": "none"}
     tset = set(tables)
     cols, fks = [], []
     for t in cat["tables"]:
@@ -243,7 +256,21 @@ def _schema_context(retrieved, expanded):
     }
 
 
-def generate(question, retrieved, expanded, prior_error=None, prior_sql=None):
+def run_schema(rid):
+    """This run's actual schema — from the metastore, NOT the global PGSCHEMA
+    env (which defaults to 'cdm' and would mis-qualify other runs)."""
+    try:
+        from store import repo as srepo
+        cat = srepo.load_run(rid)
+        if cat and cat.get("schema"):
+            return cat["schema"]
+    except Exception:
+        pass
+    return PGSCHEMA
+
+
+def generate(question, retrieved, expanded, rid, prior_error=None,
+             prior_sql=None):
     ctx = _schema_context(retrieved, expanded)
     payload = {"question": question, "schema_context": ctx}
     if prior_error:
@@ -254,7 +281,8 @@ def generate(question, retrieved, expanded, prior_error=None, prior_sql=None):
     obj, _ = claude_json(
         "다음 질문에 답하는 SQL을 작성하세요.\n\n"
         + json.dumps(payload, ensure_ascii=False),
-        SQL_SCHEMA, system=GEN_SYSTEM.format(schema=PGSCHEMA), max_tokens=2048)
+        SQL_SCHEMA, system=GEN_SYSTEM.format(schema=run_schema(rid)),
+        max_tokens=2048)
     return obj
 
 
@@ -310,6 +338,7 @@ def build_graph():
 
     class S(TypedDict, total=False):
         question: str
+        rid: str
         retrieved: Any
         expanded: Any
         gen: Any
@@ -318,7 +347,7 @@ def build_graph():
         steps: list
 
     def n_retrieve(s):
-        r = retrieve(s["question"])
+        r = retrieve(s["question"], s["rid"])
         hits = r["hits"]
         # sub-stage breakdown for the UI
         vec_tables, vseen = [], set()
@@ -348,7 +377,7 @@ def build_graph():
                 "steps": s.get("steps", []) + [{"step": "retrieve", "data": r}]}
 
     def n_expand(s):
-        e = expand(s["retrieved"]["tables"])
+        e = expand(s["retrieved"]["tables"], s["rid"])
         # per-table column counts so the UI can show what was pulled
         cols_by_t = {}
         for c in e["columns"]:
@@ -366,7 +395,7 @@ def build_graph():
 
     def n_generate(s):
         prior = s.get("result") or {}
-        gen = generate(s["question"], s["retrieved"], s["expanded"],
+        gen = generate(s["question"], s["retrieved"], s["expanded"], s["rid"],
                        prior_error=prior.get("error"),
                        prior_sql=prior.get("executed_sql"))
         return {"gen": gen,
@@ -401,13 +430,12 @@ _GRAPH = None
 def run_text2sql(question, rid=None):
     """Run the pipeline; return the final state dict (steps + result)."""
     global _GRAPH
-    if rid:
-        os.environ["V2_OUT_DIR"] = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "runs", rid)
     if _GRAPH is None:
         _GRAPH = build_graph()
-    out = _GRAPH.invoke({"question": question, "steps": [], "attempts": 0},
-                        {"recursion_limit": 25})
+    out = _GRAPH.invoke(
+        {"question": question, "rid": rid or "default",
+         "steps": [], "attempts": 0},
+        {"recursion_limit": 25})
     return {"question": question, "steps": out["steps"],
             "result": out.get("result"), "sql": out.get("gen", {}).get("sql"),
             "reasoning": out.get("gen", {}).get("reasoning"),
@@ -415,8 +443,15 @@ def run_text2sql(question, rid=None):
 
 
 def main():
-    q = " ".join(sys.argv[1:]) or "각 환자가 받은 처방 약물 수를 환자별로 세기"
-    out = run_text2sql(q)
+    # usage: text2sql.py [--rid RUN_KEY] "<question>"
+    args = sys.argv[1:]
+    rid = None
+    if "--rid" in args:
+        i = args.index("--rid")
+        rid = args[i + 1]
+        del args[i:i + 2]
+    q = " ".join(args) or "각 환자가 받은 처방 약물 수를 환자별로 세기"
+    out = run_text2sql(q, rid=rid)
     for st in out["steps"]:
         print(f"\n=== {st['step']} ===")
         d = st["data"]

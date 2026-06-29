@@ -27,8 +27,8 @@ def cfg(key, default=None, required=False):
     return val
 
 
-REGION = cfg("AWS_REGION", "us-east-1")
-MODEL_ID = cfg("BEDROCK_MODEL_ID", "us.anthropic.claude-opus-4-8")
+REGION = cfg("AWS_REGION", "ap-northeast-2")
+MODEL_ID = cfg("BEDROCK_MODEL_ID", "global.anthropic.claude-opus-4-8")
 EMBED_MODEL_ID = cfg("BEDROCK_EMBED_MODEL_ID", "amazon.titan-embed-text-v2:0")
 PGSCHEMA = cfg("PGSCHEMA", "cdm")
 OMOP_VERSION = cfg("OMOP_VERSION", "5.3")

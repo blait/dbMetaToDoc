@@ -20,10 +20,21 @@ import json
 import os
 import sys
 
+import os
+
 from config import REGION, cfg, embed, out_path, load_json
 
-INDEX = "db2doc-meta"
 EMBED_DIM = 1024          # Titan Embed Text v2 default dimension
+
+
+def index_name():
+    """Per-run index so runs never share search results.
+
+    Derived from V2_OUT_DIR (…/runs/<id>) → 'db2doc-<id>' (lowercased, AOSS
+    index names must be lowercase). Falls back to 'db2doc-default'."""
+    d = cfg("V2_OUT_DIR") or ""
+    rid = os.path.basename(os.path.normpath(d)) if d else "default"
+    return ("db2doc-" + rid).lower()
 
 
 def endpoint():
@@ -48,10 +59,11 @@ def client():
         connection_class=RequestsHttpConnection, timeout=60, pool_maxsize=20)
 
 
-def ensure_index(os_client):
-    if os_client.indices.exists(index=INDEX):
+def ensure_index(os_client, idx=None):
+    idx = idx or index_name()
+    if os_client.indices.exists(index=idx):
         return
-    os_client.indices.create(index=INDEX, body={
+    os_client.indices.create(index=idx, body={
         "settings": {"index": {"knn": True}},
         "mappings": {"properties": {
             "embedding": {"type": "knn_vector", "dimension": EMBED_DIM,
@@ -67,7 +79,7 @@ def ensure_index(os_client):
             "fk_ref": {"type": "keyword"},
             "doc": {"type": "text"},          # the embedded text (for display)
         }}})
-    print(f">> created index {INDEX}")
+    print(f">> created index {idx}")
 
 
 def catalog_docs(catalog):
@@ -92,21 +104,30 @@ def catalog_docs(catalog):
     return docs
 
 
+def index_catalog(run_key, catalog):
+    """Index a catalog DICT into run_key's index (DB/in-memory, no files)."""
+    _index(("db2doc-" + run_key).lower(), catalog)
+
+
 def cmd_index():
     catalog = load_json(out_path("catalog.json"))
+    _index(index_name(), catalog)
+
+
+def _index(idx, catalog):
     docs = catalog_docs(catalog)
     os_client = client()
-    # rebuild cleanly so re-indexing is idempotent
-    if os_client.indices.exists(index=INDEX):
-        os_client.indices.delete(index=INDEX)
-    ensure_index(os_client)
-    print(f">> embedding + indexing {len(docs)} docs (tables + columns)")
+    # rebuild THIS RUN's index cleanly (idempotent, run-scoped)
+    if os_client.indices.exists(index=idx):
+        os_client.indices.delete(index=idx)
+    ensure_index(os_client, idx)
+    print(f">> [{idx}] embedding + indexing {len(docs)} docs (tables + columns)")
     from opensearchpy.helpers import bulk
     actions = []
     for i, d in enumerate(docs, 1):
         d.pop("_id", None)          # AOSS bulk rejects custom document IDs
         d["embedding"] = embed(d["doc"])
-        actions.append({"_index": INDEX, "_source": d})
+        actions.append({"_index": idx, "_source": d})
         if i % 50 == 0:
             print(f"   embedded {i}/{len(docs)}")
     ok, errs = bulk(os_client, actions, request_timeout=180, raise_on_error=False)
@@ -115,15 +136,18 @@ def cmd_index():
     print(f">> indexed {ok} docs, {len(errs) if errs else 0} errors")
 
 
-def search(question, k=12, kinds=None):
-    """Return top-k schema elements semantically closest to the question."""
+def search(question, k=12, kinds=None, rid=None):
+    """Return top-k schema elements (this run's index) closest to the question."""
+    idx = ("db2doc-" + rid).lower() if rid else index_name()
     os_client = client()
+    if not os_client.indices.exists(index=idx):
+        return []                   # this run not indexed → no hits
     qvec = embed(question)
     knn = {"embedding": {"vector": qvec, "k": k}}
     body = {"size": k, "query": {"knn": knn},
             "_source": ["kind", "table", "column", "name", "description",
                         "rowcount", "is_pk", "fk_ref", "doc"]}
-    res = os_client.search(index=INDEX, body=body)
+    res = os_client.search(index=idx, body=body)
     hits = []
     for h in res["hits"]["hits"]:
         s = h["_source"]
@@ -142,12 +166,13 @@ def cmd_search(question):
 
 
 def cmd_status():
+    idx = index_name()
     os_client = client()
-    if not os_client.indices.exists(index=INDEX):
-        print(">> index not created yet")
+    if not os_client.indices.exists(index=idx):
+        print(f">> index {idx} not created yet")
         return
-    cnt = os_client.count(index=INDEX)["count"]
-    print(f">> index {INDEX}: {cnt} docs")
+    cnt = os_client.count(index=idx)["count"]
+    print(f">> index {idx}: {cnt} docs")
 
 
 def main():

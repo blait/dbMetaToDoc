@@ -142,22 +142,16 @@ def prf(pred, truth):
 
 
 # ---------------------------------------------------------------- main
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--no-judge", action="store_true")
-    ap.add_argument("--workers", type=int, default=8)
-    ap.add_argument("--limit", type=int, default=0)
-    args = ap.parse_args()
-    use_judge = not args.no_judge
+def score_run(desc, relations, use_judge=True, workers=8, limit=0):
+    """Score description dicts against OMOP truth; returns (report, details).
 
-    desc = load_json(out_path("descriptions.json"))
-    relations = load_json(out_path("relations.json"))
+    In-memory variant of main() — no file IO, for the DB-only pipeline."""
     field_truth = load_field_truth()
     table_truth = load_table_truth()
 
     tables = list(desc["tables"].items())
-    if args.limit:
-        tables = tables[:args.limit]
+    if limit:
+        tables = tables[:limit]
 
     jobs = []
     for table, tdesc in tables:
@@ -188,7 +182,7 @@ def main():
                 **s}
 
     details = []
-    with ThreadPoolExecutor(max_workers=args.workers) as ex:
+    with ThreadPoolExecutor(max_workers=workers) as ex:
         for i, res in enumerate(ex.map(run_job, jobs), 1):
             if res:
                 details.append(res)
@@ -264,11 +258,39 @@ def main():
         "Soverall": s_overall,
         "usage_doc": desc.get("usage"),
     }
+    detail_doc = {"items": details,
+                  "fk_errors": {"missed": fk.get("fn_items", []),
+                                "extra": fk.get("fp_items", [])}}
+    return report, detail_doc
+
+
+def headline_from_report(report):
+    """Compact headline metrics for the run row (matches the old webapp shape)."""
+    dm = report.get("description_match", {})
+    rel = report.get("relations", {})
+    return {
+        "col_judge": dm.get("column", {}).get("judge_accuracy"),
+        "tbl_judge": dm.get("table", {}).get("judge_accuracy"),
+        "pk_f1": rel.get("primary_key_f1", {}).get("f1"),
+        "fk_f1": rel.get("foreign_key_f1", {}).get("f1"),
+        "s_overall": report.get("Soverall"),
+        "judge_model": (report.get("scoring_methods", {})
+                        .get("judge_accuracy", {}).get("model")),
+    }
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--no-judge", action="store_true")
+    ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--limit", type=int, default=0)
+    args = ap.parse_args()
+    desc = load_json(out_path("descriptions.json"))
+    relations = load_json(out_path("relations.json"))
+    report, detail_doc = score_run(desc, relations, use_judge=not args.no_judge,
+                                   workers=args.workers, limit=args.limit)
     dump_json(report, out_path("score.json"))
-    dump_json({"items": details,
-               "fk_errors": {"missed": fk.get("fn_items", []),
-                             "extra": fk.get("fp_items", [])}},
-              out_path("score_details.json"))
+    dump_json(detail_doc, out_path("score_details.json"))
     print("\n==================  SCORE (v2)  ==================")
     print(json.dumps(report, indent=2, ensure_ascii=False))
 

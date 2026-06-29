@@ -340,19 +340,16 @@ def synthesize_db(table_descs):
         DB_SCHEMA, system=SYSTEM, max_tokens=1024)
 
 
-def main():
-    limit = 0
-    if "--limit" in sys.argv:
-        limit = int(sys.argv[sys.argv.index("--limit") + 1])
-
-    profile = load_json(out_path("profile.json"))
-    relations = load_json(out_path("relations.json"))
-
-    conn = connect()
-    conn.autocommit = True
+def build_descriptions(profile, relations, conn=None, limit=0):
+    """Generate db/table/column descriptions and return the result dict."""
+    own = conn is None
+    if own:
+        conn = connect()
+        conn.autocommit = True
     with conn.cursor() as cur:
         resolved = resolve_codes(cur, profile, relations)
-    conn.close()
+    if own:
+        conn.close()
     print(f">> resolved code labels for {len(resolved)} coded columns "
           f"(via recovered FK joins)")
 
@@ -405,10 +402,20 @@ def main():
         "sanity_issues": issues_by_table,
         "usage": dict(USAGE),
     }
+    print(f">> domain: {db_obj['domain']} | tokens in={USAGE['input_tokens']} "
+          f"out={USAGE['output_tokens']} calls={USAGE['calls']}")
+    return result
+
+
+def main():
+    limit = 0
+    if "--limit" in sys.argv:
+        limit = int(sys.argv[sys.argv.index("--limit") + 1])
+    profile = load_json(out_path("profile.json"))
+    relations = load_json(out_path("relations.json"))
+    result = build_descriptions(profile, relations, limit=limit)
     dump_json(result, out_path("descriptions.json"))
-    print(f">> wrote out/descriptions.json | domain: {db_obj['domain']}")
-    print(f">> tokens in={USAGE['input_tokens']} out={USAGE['output_tokens']} "
-          f"calls={USAGE['calls']}")
+    print(">> wrote out/descriptions.json")
 
 
 if __name__ == "__main__":

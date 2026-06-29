@@ -216,7 +216,7 @@ function metricsHTML(m){
   if (m.status==='failed')
     return `<div class="metrics"><div class="metric">
       <div class="k">오류</div><div class="v" style="font-size:13px;color:var(--bad)">
-      파이프라인 실패 — pipeline.log 확인</div></div></div>`;
+      ${esc(m.error || '파이프라인 실패')}</div></div></div>`;
   if (!m.with_truth)
     return `<div class="metrics">
       <div class="metric"><div class="k">테이블</div><div class="v">${h.tables??'—'}</div></div>

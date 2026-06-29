@@ -157,9 +157,12 @@ def candidate_keys(cur, table, cols, stats, rowcount):
     return {"unique_columns": unique_cols, "composite_candidates": composites}
 
 
-def main():
-    conn = connect()
-    conn.autocommit = True
+def build_profile(conn=None):
+    """Profile the schema and return the profile dict (no file IO)."""
+    own = conn is None
+    if own:
+        conn = connect()
+        conn.autocommit = True
     profile = {"schema": PGSCHEMA, "tables": {}}
     with conn.cursor() as cur:
         tables = fetch_tables(cur)
@@ -194,7 +197,13 @@ def main():
             }
             print(f"   {t:<28} rows={rc:<8} cols={len(cols):<3} "
                   f"unique={keys['unique_columns']}")
-    conn.close()
+    if own:
+        conn.close()
+    return profile
+
+
+def main():
+    profile = build_profile()
     path = dump_json(profile, out_path("profile.json"))
     print(f">> wrote {path}")
 

@@ -37,6 +37,19 @@ header .brand .logo{width:24px;height:24px;border-radius:7px;display:grid;
 header h1{font-size:14px;margin:0;font-weight:600;color:#c8cdd9}
 header a{color:#a5b4fc;text-decoration:none;font-size:12.5px;font-weight:600}
 header a:hover{color:#c7d2fe}
+.navtabs{display:flex;gap:4px;background:#222736;border:1px solid #2c3242;
+ border-radius:9px;padding:3px}
+.navtab{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;
+ font-weight:600;color:#aab2c5;text-decoration:none;padding:5px 12px;
+ border-radius:7px;transition:all .12s;white-space:nowrap}
+.navtab:hover{color:#fff;background:#2c3242}
+.navtab.active{background:linear-gradient(135deg,#6366f1,#7c5cf0);color:#fff;
+ box-shadow:0 1px 3px rgba(99,102,241,.4)}
+.navtab.active:hover{color:#fff}
+.navback{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;
+ font-weight:600;color:#8b93a5;text-decoration:none;padding:5px 12px;
+ border:1px solid #2c3242;border-radius:9px;transition:all .12s}
+.navback:hover{color:#e8eaef;border-color:#3b4150;background:#222736}
 .src-pill{font-size:10.5px;border-radius:999px;padding:2px 10px;font-weight:600;
  background:#222736;color:#8b93a5;border:1px solid #2c3242}
 .src-pill.neptune{background:#1e2742;border-color:#3b4a7a;color:#a5b4fc}
@@ -125,11 +138,16 @@ th{background:#fafbfc;color:var(--muted);font-size:10.5px;font-weight:700;
 </style></head><body>
 <header>
  <span class="brand"><span class="logo">◈</span>db2doc</span>
- <h1>스키마 그래프 — text2sql 조인 경로</h1>
+ <h1>스키마 그래프</h1>
  <span class="src-pill" id="srcpill">로딩…</span>
- <span style="margin-left:auto"></span>
- <a href="__BACK__">&larr; 카탈로그</a>&nbsp;&nbsp;&nbsp;
- <a href="__BACK__/text2sql">text2sql</a>&nbsp;&nbsp;&nbsp;<a href="/">런 목록</a>
+ <span style="margin-left:auto;display:flex;align-items:center;gap:10px">
+   <nav class="navtabs">
+     <a class="navtab" href="__BACK__">📚 카탈로그</a>
+     <a class="navtab active" href="__BACK__/graph">🕸 스키마 그래프</a>
+     <a class="navtab" href="__BACK__/text2sql">💬 text2sql</a>
+   </nav>
+   <a class="navback" href="/">← 런 목록</a>
+ </span>
 </header>
 <div class="toolbar">
  <span class="tlabel">조인 경로</span>

@@ -119,8 +119,8 @@ def validate(obj, catalog):
     return out, dropped
 
 
-def cmd_extract():
-    catalog = load_json(out_path("catalog.json"))
+def extract_concepts(catalog):
+    """LLM concept extraction from a catalog dict; returns concepts dict."""
     payload = {
         "database_domain": catalog.get("database", {}).get("domain", ""),
         "database_description": catalog.get("database", {}).get(
@@ -132,14 +132,24 @@ def cmd_extract():
         + json.dumps(payload, ensure_ascii=False),
         CONCEPTS_SCHEMA, system=SYSTEM, max_tokens=16384)
     concepts, dropped = validate(obj, catalog)
-    result = {"concepts": concepts, "dropped_references": dropped,
-              "usage": usage}
+    return {"concepts": concepts, "dropped_references": dropped,
+            "usage": usage}
+
+
+def cmd_extract():
+    catalog = load_json(out_path("catalog.json"))
+    result = extract_concepts(catalog)
     dump_json(result, out_path("concepts.json"))
     roots = [c["name"] for c in concepts if not c["is_a"]]
     print(f">> {len(concepts)} concepts ({len(roots)} roots: {roots})")
     if dropped:
         print(f"   dropped unknown references on {len(dropped)} concepts")
     print(f">> wrote {out_path('concepts.json')}")
+
+
+def load_concepts_to_graph(run_key, gid, concepts):
+    """Load a concepts list into run_key's graph (DB/in-memory, no files)."""
+    _load(gid, run_key, concepts)
 
 
 def cmd_load():
@@ -149,7 +159,11 @@ def cmd_load():
         raise SystemExit("no graph for this run — run `graph.py load` first")
     run = G.current_run_id()
     data = load_json(out_path("concepts.json"))
-    concepts = data["concepts"]
+    _load(gid, run, data["concepts"])
+
+
+def _load(gid, run, concepts):
+    import graph as G
 
     # clear this run's concept nodes before reloading (idempotent)
     G.run_query(gid, "MATCH (c:Concept {run: $run}) DETACH DELETE c",

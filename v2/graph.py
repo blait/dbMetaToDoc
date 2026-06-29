@@ -210,6 +210,92 @@ def current_run_id():
     return rid or "default"
 
 
+def create_run_graph(run_key, existing_gid=None):
+    """Return a dedicated Neptune graph for run_key, creating it if needed.
+
+    DB-only variant of ensure_run_graph (no meta.json). Pass the run's stored
+    graph_id as existing_gid to reuse it; returns the (possibly new) gid."""
+    c = client()
+    if existing_gid:
+        try:
+            if c.get_graph(graphIdentifier=existing_gid)["status"] == "AVAILABLE":
+                return existing_gid
+        except Exception:
+            pass  # stale -> recreate
+    name = f"db2doc-{run_key}"[:63]
+    gid = c.create_graph(graphName=name, provisionedMemory=16,
+                         publicConnectivity=True, replicaCount=0,
+                         deletionProtection=False)["id"]
+    print(f">> created dedicated graph {gid} ({name}) — waiting AVAILABLE")
+    while True:
+        st = c.get_graph(graphIdentifier=gid)["status"]
+        if st == "AVAILABLE":
+            break
+        if st in ("FAILED", "DELETING"):
+            raise SystemExit(f"graph creation failed: {st}")
+        time.sleep(15)
+    return gid
+
+
+def load_catalog_to_graph(run_key, catalog, existing_gid=None):
+    """Load a catalog DICT into run_key's dedicated graph (no files).
+
+    Returns the graph id (create it if existing_gid is stale/None)."""
+    gid = create_run_graph(run_key, existing_gid)
+    db_node, tables, columns, refs, joins = build_payload(catalog)
+    db_node["run"] = run_key
+    for x in tables + columns + refs + joins:
+        x["run"] = run_key
+    print(f">> loading run '{run_key}' into {gid}: {len(tables)} tables, "
+          f"{len(columns)} columns, {len(refs)} FK refs")
+    delete_run_namespace(gid, run_key)
+
+    run_query(gid, """
+        MERGE (d:Database {name: $name, run: $run})
+        SET d.domain = $domain, d.description = $description
+    """, db_node)
+    for batch in chunks(tables, 50):
+        run_query(gid, """
+            UNWIND $rows AS r
+            MERGE (t:Table {name: r.name, run: r.run})
+            SET t.description = r.description, t.rowcount = r.rowcount,
+                t.n_columns = r.n_columns, t.pk = r.pk
+            WITH t, r
+            MATCH (d:Database {name: $db, run: r.run})
+            MERGE (d)-[:HAS_TABLE]->(t)
+        """, {"rows": batch, "db": db_node["name"]})
+    for batch in chunks(columns, 50):
+        run_query(gid, """
+            UNWIND $rows AS r
+            MERGE (c:Column {id: r.id, run: r.run})
+            SET c.name = r.name, c.table = r.table, c.type = r.type,
+                c.nullable = r.nullable, c.is_pk = r.is_pk,
+                c.description = r.description, c.confidence = r.confidence,
+                c.examples = r.examples
+            WITH c, r
+            MATCH (t:Table {name: r.table, run: r.run})
+            MERGE (t)-[:HAS_COLUMN]->(c)
+        """, {"rows": batch})
+    for batch in chunks(refs, 50):
+        run_query(gid, """
+            UNWIND $rows AS r
+            MATCH (a:Column {id: r.from, run: r.run}),
+                  (b:Column {id: r.to, run: r.run})
+            MERGE (a)-[e:REFERENCES]->(b)
+            SET e.source = r.source, e.confidence = r.confidence
+        """, {"rows": batch})
+    for batch in chunks(joins, 50):
+        run_query(gid, """
+            UNWIND $rows AS r
+            MATCH (a:Table {name: r.from, run: r.run}),
+                  (b:Table {name: r.to, run: r.run})
+            MERGE (a)-[e:JOINS_TO {via: r.via}]->(b)
+            SET e.source = r.source, e.confidence = r.confidence
+        """, {"rows": batch})
+    print("   graph load done")
+    return gid
+
+
 def delete_run_namespace(gid, run):
     """Remove all nodes/edges of one run (idempotent reload)."""
     run_query(gid, "MATCH (n {run: $run}) DETACH DELETE n", {"run": run})

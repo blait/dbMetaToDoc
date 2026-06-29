@@ -1,5 +1,8 @@
 # db2doc **v2** — 문서 없는 DB의 의미를 복원해 카탈로그로
 
+> 🚀 **처음 쓰는 분은 [`INSTALL.md`](INSTALL.md)** — repo 클론 → 설치 → 내 DB 연결 →
+> 결과 확인까지 단계별 설치·사용 가이드.
+>
 > 📘 **상세 기술 가이드: [`GUIDE.md`](GUIDE.md)** — 인용 논문·차용 내역, description 생성
 > 메커니즘, 평가 방법, 온톨로지 레이어, text2sql(메타 RAG+Graph+LangGraph)까지 전부 정리.
 
@@ -29,15 +32,15 @@ cd v2
 ../.venv/bin/uvicorn webapp:app --port 8200
 # -> http://localhost:8200  (첫 페이지에서 DB 연결 → 분석 시작 → 런 클릭해 결과 확인)
 
-# (B) CLI: 루트 .env의 RDS/Bedrock 설정으로 단일 실행
-../.venv/bin/python run.py            # 전체
-../.venv/bin/python run.py --from 3   # 3단계부터 재개
-../.venv/bin/python run.py --skip-score  # 정답지 없는 DB (카탈로그만)
+# (B) CLI: PG* 환경변수가 대상 DB, METASTORE_* 가 결과 저장소
+../.venv/bin/python run.py --run-key myrun --name "내 DB"   # 카탈로그 생성·적재
+../.venv/bin/python run.py --run-key omop --with-truth      # OMOP eval (채점 포함)
 ```
 
-산출물(런별 `runs/<id>/` 또는 CLI는 `out/`): `catalog.json`(카탈로그),
-`data_dictionary.md`, `comments.sql`, `erd.mmd`, `score.json`(채점),
-`viewer.html`(정적 뷰어 — CLI 실행 시).
+**결과는 전부 MySQL 메타스토어에 저장된다** (단일 진실 공급원). 파이프라인은 단일
+프로세스 인메모리 체인으로 동작하며 중간/최종 산출물을 디스크 파일로 쓰지 않는다 —
+스키마 그래프는 Neptune, 검색 인덱스는 OpenSearch에 적재된다. 웹앱의 조회·편집·
+그래프·text2sql은 모두 메타스토어를 읽는다.
 
 ---
 
@@ -172,27 +175,36 @@ Semantic Entropy (Nature 2024, DOI:10.1038/s41586-024-07421-0) — 샘플 일관
 
 ```
 v2/
-  config.py     # env/RDS/Bedrock + 토큰 가드레일 + IO (V2_OUT_DIR로 런별 출력)
+  config.py     # env/RDS/Bedrock + 토큰 가드레일
   profiler.py   # 1. 통계 프로파일 (단일 집계쿼리, full-table 키 검증, enum 분포)
   relations.py  # 2. PK/FK 복원 (통계+이름+LLM제안→값검증, 게이트 G1-G6)
   describe.py   # 3. 의미 추론 (코드값 라벨 조인 주입, sanity 자기검증 루프, 증거 보정)
-  catalog.py    # 4. 카탈로그 (catalog.json + data dictionary + COMMENT SQL + ERD)
-  score.py      # 5. 정답지 유사도 (임베딩 cosine + LLM judge + calibration 리포트)
-  graph.py      # 7. 스키마 그래프: 카탈로그 → AWS Neptune Analytics (openCypher 적재)
-  ui.py         #    상세 페이지 템플릿 (트리 카탈로그 + 생성vs정답, viewer/webapp 공용)
-  graph_ui.py   #    그래프 시각화 페이지 (vis-network, 조인 경로 하이라이트)
-  viewer.py     # 6. 정적 HTML 뷰어 (단일 파일, 서버 불필요)
-  webapp.py     #    FastAPI 웹 앱: 런 목록 홈 + 새 DB 연결 + 상세 + /runs/<id>/graph
-  run.py        # 전체 실행 (--skip-score: 정답지 없는 DB)
-  out/          # CLI 산출물 (gitignore)
-  runs/         # 웹 앱 런별 산출물 + meta.json (gitignore)
+  catalog.py    # 4. 카탈로그 빌드 (dict; 원본주석 보존, 읽기전용 — COMMENT/DDL 미생성)
+  score.py      # 5. 정답지 유사도 (임베딩 cosine + LLM judge + calibration; eval 전용)
+  concepts.py   #    개념(온톨로지) 레이어 추출/적재
+  graph.py      # 7. 스키마 그래프: 카탈로그 dict → AWS Neptune (런별 전용 그래프)
+  metasearch.py #    메타데이터 RAG: 카탈로그 dict → OpenSearch 벡터 인덱스
+  text2sql.py   #    LangGraph: retrieve(RAG)→expand(그래프)→generate→execute→repair
+  pipeline.py   #    ★ 인메모리 오케스트레이터: 위 단계를 한 프로세스로 엮어 메타스토어 적재
+  ui.py / graph_ui.py / t2sql_ui.py / home_ui.py   # 웹 페이지 템플릿
+  viewer.py     #    정적 HTML 뷰어 (단일 파일, 서버 불필요 — 메타스토어 미사용 데모용)
+  webapp.py     #    FastAPI 웹 앱 (메타스토어 전용): 런 목록 + 새 DB 연결 + 상세/그래프/text2sql
+  store/        #    메타스토어(MySQL): models·db·repo + schema.sql(DDL)
+  run.py        #    CLI 진입점 (pipeline.run_pipeline 래퍼)
 ```
 
+**메타스토어(MySQL, 필수)**: 결과의 단일 진실 공급원이다. 파이프라인은 단일 프로세스
+인메모리 체인으로 동작하고 — 중간 산출물을 파일로 쓰지 않는다 — 최종 카탈로그·설명
+(AI 원본 `ai_text` + 검수본 `current_text`)·검수 이력(`revisions`)·온톨로지(`concepts`)·
+text2sql 이력(`t2sql_history`)을 DB에 적재한다. 웹 편집은 `revisions` 감사 이력으로 남고,
+런 전용 Neptune 그래프 ID는 `runs.graph_id`에 저장된다. `.env`에 `METASTORE_*`(또는
+`METASTORE_URL`)가 없으면 웹앱은 503으로 응답한다. 구성·DDL은 [`INSTALL.md`](INSTALL.md) §7.
+
 웹 앱 구조: 홈(`/`)에서 ① 기존 런 리스트(상태·카탈로그 규모·judge/F1 점수·점수 출처 표시,
-클릭하면 `/runs/<id>` 상세로) ② 새 DB 연결 폼(연결 테스트 → 분석 시작, 백그라운드로 파이프라인
-실행, 5초마다 자동 갱신). 임의 고객 DB는 정답지가 없으므로 기본은 **카탈로그만** 생성하고,
-OMOP 평가용 DB만 "정답지 채점 포함"을 켜서 유사도 점수까지 만든다. 비밀번호는 실행 프로세스
-환경변수로만 전달되고 디스크(meta.json)에는 저장하지 않는다.
+클릭하면 `/runs/<id>` 상세로) ② 새 DB 연결 폼(연결 테스트 → 분석 시작, 백그라운드 스레드로
+인메모리 파이프라인 실행, 5초마다 자동 갱신). 임의 고객 DB는 정답지가 없으므로 기본은
+**카탈로그만** 생성하고, OMOP 평가용 DB만 "정답지 채점 포함"(`with_truth`)을 켜서 유사도
+점수까지 만든다. 원본 DB 접속 비밀번호는 실행 중 환경변수로만 쓰이고 어디에도 저장하지 않는다.
 
 ---
 
@@ -222,14 +234,11 @@ Steiner tree)이 실제 코드로 쓰는 방식이다.
 (그래프 생성 시점에만 설정 가능, 1~65,535차원)에 임베딩을 얹으면 "질문 → 벡터 검색으로
 관련 테이블 → 그래프 탐색으로 조인 경로 확장"까지 단일 엔진으로 처리 가능 (로드맵).
 
-사용:
-```bash
-export NEPTUNE_GRAPH_ID=...           # 없으면 graph.py create 로 생성 (16 m-NCU, public)
-../.venv/bin/python graph.py create   # ~3분, IAM SigV4 public endpoint
-V2_OUT_DIR=runs/<id> ../.venv/bin/python graph.py load    # 카탈로그 적재 (멱등 MERGE)
-../.venv/bin/python graph.py status   # 노드/엣지 수
-../.venv/bin/python graph.py delete   # 과금 중지 (스냅샷 없이 삭제)
-```
+사용 — **런마다 전용 Neptune 그래프**가 자동 생성된다 (그래프 ID는 메타스토어
+`runs.graph_id`에 저장; 물리적으로 분리되어 런 간 노드가 절대 섞이지 않음). `run.py`/
+웹앱이 분석 완료 시 `graph.load_catalog_to_graph(run_key, catalog)`로 자동 적재하므로
+보통 별도 명령이 필요 없다. 웹앱에서 런을 삭제(✕)하면 그 런의 전용 그래프도 함께
+삭제되어 과금이 멈춘다. **그래프당 시간당 과금이므로 안 쓰는 런은 삭제할 것.**
 
 ### 개념 레이어 (온톨로지) — `concepts.py`
 
@@ -244,9 +253,8 @@ V2_OUT_DIR=runs/<id> ../.venv/bin/python graph.py load    # 카탈로그 적재 
 (:Concept)-[:MAPPED_TO {confidence}]->(:Column) # 핵심 컬럼
 ```
 
-```bash
-V2_OUT_DIR=runs/<id> ../.venv/bin/python concepts.py all   # extract(LLM) + load(Neptune)
-```
+개념 추출·적재도 `run.py`가 파이프라인 안에서 자동 수행한다
+(`concepts.extract_concepts(catalog)` → `concepts.load_concepts_to_graph(...)`).
 
 OMOP 런 실측: 개념 39개(환자/방문/임상 이벤트/어휘 등), IS_A 15개
 (예: Condition/Drug/Measurement → Clinical Event), 테이블 매핑 37개.
@@ -266,9 +274,9 @@ Neptune Analytics openCypher 주의(실측): `shortestPath()`/`reduce()` 기반 
 미지원 → 길이순 over-fetch 후 서버측 파이썬에서 단순경로 필터. 리스트 프로퍼티 미지원 →
 `examples`는 comma-join 문자열. 뮤테이션은 UNWIND 배치 MERGE로 멱등 적재.
 
-비용(공식 Pricing API 실조회): 16 m-NCU(최소) = **$0.48/hr ≈ $11.5/일** (us-east-1).
-replica 기본값이 1이라 `--replica-count 0` 미지정 시 2배($0.96/hr)가 되므로 주의 —
-`graph.py create`는 0으로 고정해 둠. PoC 후 `graph.py delete`로 정리할 것.
+비용(공식 Pricing API 실조회): 그래프 1개 = 16 m-NCU(최소) **$0.48/hr ≈ $11.5/일** (us-east-1,
+replica 0 고정). **런마다 전용 그래프**이므로 동시에 N개 런의 그래프가 떠 있으면 N배 과금된다 —
+안 쓰는 런은 웹앱에서 삭제(✕)하면 그래프가 함께 삭제되어 과금이 멈춘다 (자동 정리는 없음).
 
 Neptune Analytics 공식 문서로 확인된 추가 주의점:
 - 라벨·프로퍼티·엣지가 전부 사라지면 vertex가 **암묵적으로 삭제**됨 → 모든 노드에

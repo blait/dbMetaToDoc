@@ -33,6 +33,19 @@ header .small{color:#8b93a5;font-size:12px;overflow:hidden;white-space:nowrap;
  text-overflow:ellipsis;max-width:46vw}
 header a{color:#a5b4fc;text-decoration:none;font-size:12.5px;font-weight:600}
 header a:hover{color:#c7d2fe}
+.navtabs{display:flex;gap:4px;background:#222736;border:1px solid #2c3242;
+ border-radius:9px;padding:3px}
+.navtab{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;
+ font-weight:600;color:#aab2c5;text-decoration:none;padding:5px 12px;
+ border-radius:7px;transition:all .12s;white-space:nowrap}
+.navtab:hover{color:#fff;background:#2c3242}
+.navtab.active{background:linear-gradient(135deg,#6366f1,#7c5cf0);color:#fff;
+ box-shadow:0 1px 3px rgba(99,102,241,.4)}
+.navtab.active:hover{color:#fff}
+.navback{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;
+ font-weight:600;color:#8b93a5;text-decoration:none;padding:5px 12px;
+ border:1px solid #2c3242;border-radius:9px;transition:all .12s}
+.navback:hover{color:#e8eaef;border-color:#3b4150;background:#222736}
 .scorecards{display:flex;gap:10px;padding:12px 22px;flex-wrap:wrap;flex:none;
  border-bottom:1px solid var(--line);background:var(--surface)}
 .card{border:1px solid var(--line);border-radius:12px;padding:9px 16px;
@@ -82,8 +95,25 @@ aside input[type=search]:focus{outline:none;border-color:var(--accent);
  margin:8px 0;background:var(--surface);box-shadow:var(--shadow)}
 .descbox.gen{background:#f5f7ff;border-color:#c7d2fe}
 .descbox.ref{background:#f2fdf5;border-color:#bbf7d0}
+.descbox.orig{background:#f8f7f4;border-color:#d6cdbb}
+.descbox.orig .tag{color:#8a7a55}
+.descbox{position:relative}
 .descbox .tag{font-size:10.5px;color:var(--muted);display:block;margin-bottom:5px;
  font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.edit-btn{position:absolute;top:10px;right:10px;font-size:11px;border:1px solid #c7d2fe;
+ background:#fff;color:var(--accent);border-radius:7px;padding:2px 9px;cursor:pointer;
+ font-weight:600}
+.edit-btn:hover{background:var(--accent);color:#fff}
+.gb-edit{width:100%;min-height:80px;border:1px solid var(--accent);border-radius:8px;
+ padding:8px 10px;font:13px/1.5 inherit;resize:vertical;margin-top:4px;
+ box-shadow:0 0 0 3px rgba(79,70,229,.12)}
+.gb-bar{display:flex;gap:8px;align-items:center;margin-top:8px}
+.save-btn{font-size:12px;border:1px solid var(--accent);background:var(--accent);
+ color:#fff;border-radius:7px;padding:4px 12px;cursor:pointer;font-weight:600}
+.save-btn:hover{background:#4338ca}
+.cancel-btn{font-size:12px;border:1px solid var(--line);background:#fff;
+ color:var(--muted);border-radius:7px;padding:4px 12px;cursor:pointer}
+.gb-msg{font-size:12px;color:var(--muted)}
 .judge-line{margin:10px 0;font-size:13px}
 .judge1{color:var(--ok);font-weight:700}.judge0{color:var(--bad);font-weight:700}
 .conf-hi{color:var(--ok);font-weight:600}.conf-lo{color:var(--warn);font-weight:600}
@@ -107,7 +137,7 @@ th{background:#fafbfc;color:var(--muted);font-size:11px;font-weight:700;
  <span class="brand"><span class="logo">◈</span>db2doc</span>
  <h1 id="hdrtitle">카탈로그 &amp; 유사도</h1>
  <span class="small" id="hdrline"></span>
- <span style="margin-left:auto">__BACKLINK__</span>
+ <span style="margin-left:auto;display:flex;align-items:center;gap:10px">__BACKLINK__</span>
 </header>
 <div class="scorecards" id="cards"></div>
 <div class="split">
@@ -226,20 +256,78 @@ function renderTree(filter){
 const currentFilter = ()=>document.getElementById('q').value.trim().toLowerCase();
 document.getElementById('q').oninput = ()=>renderTree(currentFilter());
 
-function compareBlock(key, genText){
+// editable generated-description box. `tbl`/`col` identify what to save;
+// `text` is the current (possibly human-edited) description.
+function genBox(tbl, col, text, edited){
+  const eid = 'gb_' + (col ? tbl+'__'+col : tbl).replace(/[^a-zA-Z0-9]/g,'_');
+  const canEdit = !!window.RID;
+  const editBtn = canEdit
+    ? `<button class="edit-btn" title="수정" data-edit="${eid}"
+         data-tbl="${esc(tbl)}" data-col="${col?esc(col):''}">✎ 수정</button>`
+    : '';
+  const label = tbl==='__db__' ? '생성된 DB 설명' : '생성된 설명';
+  return `<div class="descbox gen" id="${eid}">
+     <span class="tag">${label} (${esc(GEN_MODEL)})${edited?' · <b style="color:var(--accent)">사람 검수 완료</b>':''}</span>
+     ${editBtn}
+     <div class="gb-text">${esc(text)}</div>
+   </div>`;
+}
+
+function startEdit(eid, tbl, col){
+  const box = document.getElementById(eid);
+  const cur = box.querySelector('.gb-text').textContent;
+  box.querySelector('.gb-text').style.display = 'none';
+  const btn = box.querySelector('.edit-btn'); if(btn) btn.style.display='none';
+  const ta = document.createElement('textarea');
+  ta.className = 'gb-edit'; ta.value = cur;
+  const bar = document.createElement('div'); bar.className = 'gb-bar';
+  bar.innerHTML = `<button class="save-btn" title="저장">✔ 저장</button>
+                   <button class="cancel-btn" title="취소">✕ 취소</button>
+                   <span class="gb-msg"></span>`;
+  box.append(ta, bar);
+  ta.focus();
+  bar.querySelector('.cancel-btn').onclick = ()=>renderDetail(selected);
+  bar.querySelector('.save-btn').onclick = async ()=>{
+    const val = ta.value.trim();
+    const msg = bar.querySelector('.gb-msg');
+    msg.textContent = '저장 중…';
+    try {
+      const r = await fetch(`/api/runs/${window.RID}/catalog/description`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({table: tbl, column: col, description: val})});
+      if(!r.ok){ msg.textContent = '실패: '+await r.text(); return; }
+      // reflect in the in-memory CATALOG so re-render shows the new text
+      if (tbl === '__db__'){
+        CATALOG.database.db_description = val; CATALOG.database.edited = true;
+      } else {
+        const T = CATALOG.tables.find(x=>x.name===tbl);
+        if (col){ const C=T.columns.find(x=>x.name===col); C.description=val; C.edited=true; }
+        else { T.description=val; T.edited=true; }
+      }
+      renderDetail(selected);
+    } catch(err){ msg.textContent = '오류: '+err; }
+  };
+}
+
+// 원본 DB 주석 박스 (코드가 그대로 보존한 값 — LLM 미개입, 읽기 전용)
+function origBox(original){
+  if(!original) return '';
+  return `<div class="descbox orig"><span class="tag">원본 DB 주석 (그대로 보존)</span>
+    <div class="gb-text">${esc(original)}</div></div>`;
+}
+
+function compareBlock(key, genText, tbl, col, edited, original){
   const d = scoreBy[key];
+  const orig = origBox(original);
+  const gen = genBox(tbl, col, genText, edited);
   if(!d) {
-    if (genText) return `
-      <div class="descbox gen"><span class="tag">생성된 설명 (${esc(GEN_MODEL)})</span>
-        ${esc(genText)}</div>
-      <p class="small" style="color:var(--muted)">${SCORE
+    if (genText) return orig + gen + `<p class="small" style="color:var(--muted)">${SCORE
         ? '정답지에 채점 가능한 참조 텍스트가 없어 채점 제외 (정답 NA/빈값).'
-        : '이 런은 정답지 채점 없이 생성되었습니다.'}</p>`;
-    return '';
+        : (original ? '원본 DB 주석을 단서로 생성·검증한 설명입니다.'
+                    : '이 런은 정답지 채점 없이 생성되었습니다.')}</p>`;
+    return orig + gen;
   }
-  return `
-   <div class="descbox gen"><span class="tag">생성된 설명 (${esc(GEN_MODEL)})</span>
-     ${esc(d.generated)}</div>
+  return orig + gen + `
    <div class="descbox ref"><span class="tag">공식 정답지 (한글화)</span>${esc(d.reference)}</div>
    <div class="judge-line">
      judge: ${d.judge===1?'<span class="judge1">✓ 의미 일치</span>'
@@ -256,8 +344,7 @@ function renderDetail(id){
   const el = document.getElementById('detail');
   if(!id || id==='db'){
     el.innerHTML = `<h2>${esc(CATALOG.schema)} <span class="pill">database</span></h2>
-     <div class="descbox gen"><span class="tag">생성된 DB 설명 (${esc(GEN_MODEL)})</span>
-       ${esc(CATALOG.database.db_description||'')}</div>
+     ${genBox('__db__', null, CATALOG.database.db_description||'', CATALOG.database.edited)}
      <dl class="kv">
        <dt>도메인 추론</dt><dd>${esc(CATALOG.database.domain||'')}</dd>
        <dt>테이블</dt><dd>${CATALOG.tables.length}</dd>
@@ -293,7 +380,7 @@ function renderDetail(id){
         : '—'}</dd>
      </dl>
      <h3>테이블 설명 ${scoreBy[t.name]?'— 생성 vs 정답':''}</h3>
-     ${compareBlock(t.name, t.description)}
+     ${compareBlock(t.name, t.description, t.name, null, t.edited, t.original_comment)}
      ${t.reasoning?`<p class="small" style="color:var(--muted)">추론 근거: ${esc(t.reasoning)}</p>`:''}
      <h3>컬럼 (${t.columns.length})</h3>
      <table><thead><tr><th>컬럼</th><th>타입</th><th>키</th><th>설명 (생성)</th>
@@ -304,7 +391,7 @@ function renderDetail(id){
           ${esc(c.name)}</span></td>
          <td>${esc(c.type)}</td>
          <td>${c.is_pk?'PK':''}${c.fk?` FK→${esc(c.fk)}`:''}</td>
-         <td>${esc(c.description)}</td>
+         <td>${esc(c.description)}${c.edited?' <span class="pill" style="background:var(--accent-soft);color:var(--accent);border-color:#c7d2fe">검수</span>':''}</td>
          <td>${conf(c.confidence)}${c.data_unverified?' ⚠':''}</td>
          ${SCORE?`<td>${judgeMark(key)||'—'}</td>`:''}</tr>`;}).join('')}
      </tbody></table>`;
@@ -331,7 +418,7 @@ function renderDetail(id){
       <dt>샘플 값</dt><dd>${(c.stats.examples||[]).map(v=>`<code>${esc(v)}</code>`).join(' ')||'—'}</dd>
      </dl>
      <h3>컬럼 설명 ${scoreBy[id]?'— 생성 vs 정답':''}</h3>
-     ${compareBlock(id, c.description)}`;
+     ${compareBlock(id, c.description, tn, cn, c.edited, c.original_comment)}`;
   }
   el.querySelectorAll('[data-goto]').forEach(a=>a.onclick=()=>{
     const gid = a.dataset.goto;
@@ -339,6 +426,8 @@ function renderDetail(id){
     selected = gid; renderTree(currentFilter()); renderDetail(gid);
     document.getElementById('detail').scrollTop = 0;
   });
+  el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>
+    startEdit(b.dataset.edit, b.dataset.tbl, b.dataset.col || null));
 }
 
 renderTree('');
@@ -351,8 +440,9 @@ renderDetail('db');
 
 
 def render_inline(catalog_json, score_json, details_json, backlink=""):
-    """Static build: inline the data and call init() immediately."""
-    boot = (f"init({catalog_json}, {score_json or 'null'}, "
+    """Static build: inline the data and call init(). RID=null → read-only
+    (no backend to save edits)."""
+    boot = (f"window.RID=null; init({catalog_json}, {score_json or 'null'}, "
             f"{details_json or 'null'});")
     return (DETAIL_PAGE
             .replace("__BACKLINK__", backlink)
@@ -362,6 +452,7 @@ def render_inline(catalog_json, score_json, details_json, backlink=""):
 def render_fetching(run_id):
     """Web-app build: fetch the artifacts from the API, then init()."""
     boot = f"""
+window.RID = "{run_id}";
 (async () => {{
   const get = async n => {{
     const r = await fetch('/api/runs/{run_id}/artifact/' + n);
@@ -375,9 +466,12 @@ def render_fetching(run_id):
   }}
   init(catalog, await get('score.json'), await get('score_details.json'));
 }})();"""
-    back = (f'<a href="/runs/{run_id}/graph">스키마 그래프</a>&nbsp;&nbsp;&nbsp;'
-            f'<a href="/runs/{run_id}/text2sql">text2sql</a>&nbsp;&nbsp;&nbsp;'
-            f'<a href="/">&larr; 런 목록</a>')
+    back = (f'<nav class="navtabs">'
+            f'<a class="navtab active" href="/runs/{run_id}">📚 카탈로그</a>'
+            f'<a class="navtab" href="/runs/{run_id}/graph">🕸 스키마 그래프</a>'
+            f'<a class="navtab" href="/runs/{run_id}/text2sql">💬 text2sql</a>'
+            f'</nav>'
+            f'<a class="navback" href="/">← 런 목록</a>')
     return (DETAIL_PAGE
             .replace("__BACKLINK__", back)
             .replace("__BOOTSTRAP__", boot))
