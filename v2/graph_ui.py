@@ -165,6 +165,7 @@ th{background:#fafbfc;color:var(--muted);font-size:10.5px;font-weight:700;
   <span><i style="background:#6366f1"></i>테이블 (크기=행수)</span>
   <span><i style="background:#c8ccd4"></i>빈 테이블</span>
   <span id="lg-concept" style="display:none"><i style="background:#f59e0b"></i>개념</span>
+  <span id="lg-crel" style="display:none"><span class="ln" style="border-color:#a855f7"></span>개념 관계</span>
   <span><span class="ln"></span>선언/통계 FK</span>
   <span><span class="ln dash"></span>이름/LLM 추정</span>
  </span>
@@ -462,6 +463,17 @@ function addConceptLayer(){
     width: 1, arrows: {to:{enabled:true,scaleFactor:.4}},
     title: `${m.concept} → ${m.table} (MAPPED_TO, conf ${m.confidence??'—'})`,
   }));
+  // semantic relations between concepts: purple solid edges, verb label
+  (C.relations||[]).forEach((r,i)=>eds.push({
+    id: 'crel'+i, from: cid(r.src), to: cid(r.dst),
+    arrows: {to:{enabled:true,scaleFactor:.55}},
+    color: {color:'#a855f7', highlight:'#7c3aed'},
+    width: 1.8, label: r.name,
+    font: {size:9, color:'#7c3aed', strokeWidth:4, strokeColor:'#f5f6f8'},
+    title: `(${r.src})-[${r.name}]->(${r.dst})\n`
+         + `via ${r.via||'—'} · ${r.cardinality||'—'}`
+         + ` · conf ${r.confidence??'—'}`,
+  }));
   EDGES.add(eds);
   // brief physics re-run to place the new nodes, then freeze again
   NET.setOptions({physics:{enabled:true,
@@ -488,11 +500,17 @@ document.getElementById('conceptlayer').onchange = async e=>{
     }
     addConceptLayer();
     search.style.display = ''; lg.style.display = '';
+    const lgr = document.getElementById('lg-crel');
+    if ((CONCEPTS.relations||[]).length) lgr.style.display = '';
     document.getElementById('qhint').textContent =
-      `개념 ${CONCEPTS.concepts.length}개 (${CONCEPTS.source})`;
+      `개념 ${CONCEPTS.concepts.length}개`
+      + ((CONCEPTS.relations||[]).length
+         ? ` · 관계 ${CONCEPTS.relations.length}개` : '')
+      + ` (${CONCEPTS.source})`;
   } else {
     removeConceptLayer();
     search.style.display = 'none'; lg.style.display = 'none';
+    document.getElementById('lg-crel').style.display = 'none';
     document.getElementById('qhint').textContent = '';
   }
 };

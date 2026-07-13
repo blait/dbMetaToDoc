@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from .db import Session
 from .models import (Run, Table, Column, Description, Revision, Concept,
-                     T2SQLHistory)
+                     ConceptRelation, T2SQLHistory, VerifiedQuery)
 
 
 # ------------------------------------------------------------------ write
@@ -34,6 +34,7 @@ def upsert_run(run_key, catalog, concepts=None, meta=None):
                 s.delete(t)
             s.query(Description).filter_by(run_id=run.id).delete()
             s.query(Concept).filter_by(run_id=run.id).delete()
+            s.query(ConceptRelation).filter_by(run_id=run.id).delete()
         else:
             run = Run(run_key=run_key)
             s.add(run)
@@ -116,6 +117,13 @@ def upsert_run(run_key, catalog, concepts=None, meta=None):
                     is_a=c.get("is_a"), confidence=c.get("confidence"),
                     mapped_tables=c.get("tables"),
                     key_columns=c.get("key_columns")))
+            for r in concepts.get("relations", []):
+                s.add(ConceptRelation(
+                    run_id=run.id, name=r["name"],
+                    src_concept=r["src"], dst_concept=r["dst"],
+                    cardinality=r.get("cardinality"), via=r.get("via"),
+                    description=r.get("description"),
+                    confidence=r.get("confidence")))
         s.commit()
         return run.run_key
 
@@ -258,14 +266,74 @@ def load_concepts(run_key):
             concepts.append({"name": c.name, "name_ko": c.name_ko,
                              "description": c.description,
                              "synonyms": c.synonyms,
+                             "is_a": c.is_a,
                              "confidence": c.confidence,
+                             "tables": c.mapped_tables or [],
                              "key_columns": c.key_columns or []})
             if c.is_a:
                 isa.append({"child": c.name, "parent": c.is_a})
             for t in (c.mapped_tables or []):
                 maps.append({"concept": c.name, "table": t,
                              "confidence": c.confidence})
-        return {"concepts": concepts, "is_a": isa, "mappings": maps}
+        rels = [{"name": r.name, "src": r.src_concept, "dst": r.dst_concept,
+                 "cardinality": r.cardinality, "via": r.via,
+                 "description": r.description, "confidence": r.confidence}
+                for r in s.query(ConceptRelation).filter_by(run_id=run.id)]
+        return {"concepts": concepts, "is_a": isa, "mappings": maps,
+                "relations": rels}
+
+
+def replace_concept_relations(run_key, relations):
+    """Replace this run's concept relations (backfill / re-extraction)."""
+    with Session() as s:
+        run = s.query(Run).filter_by(run_key=run_key).one_or_none()
+        if not run:
+            raise KeyError(run_key)
+        s.query(ConceptRelation).filter_by(run_id=run.id).delete()
+        for r in relations:
+            s.add(ConceptRelation(
+                run_id=run.id, name=r["name"],
+                src_concept=r["src"], dst_concept=r["dst"],
+                cardinality=r.get("cardinality"), via=r.get("via"),
+                description=r.get("description"),
+                confidence=r.get("confidence")))
+        s.commit()
+        return len(relations)
+
+
+# ------------------------------------------------------------ verified qs
+def add_verified_query(run_key, entry):
+    with Session() as s:
+        run = s.query(Run).filter_by(run_key=run_key).one_or_none()
+        if not run:
+            raise KeyError(run_key)
+        s.add(VerifiedQuery(
+            run_id=run.id, question=entry.get("question", ""),
+            sql=entry.get("sql"), rowcount=entry.get("rowcount"),
+            ok=bool(entry.get("ok"))))
+        s.commit()
+
+
+def get_verified_queries(run_key, ok_only=True):
+    with Session() as s:
+        run = s.query(Run).filter_by(run_key=run_key).one_or_none()
+        if not run:
+            return []
+        q = s.query(VerifiedQuery).filter_by(run_id=run.id)
+        if ok_only:
+            q = q.filter_by(ok=True)
+        return [{"question": v.question, "sql": v.sql,
+                 "rowcount": v.rowcount, "ok": v.ok,
+                 "created_at": v.created_at.isoformat() if v.created_at else None}
+                for v in q.order_by(VerifiedQuery.id.asc())]
+
+
+def clear_verified_queries(run_key):
+    with Session() as s:
+        run = s.query(Run).filter_by(run_key=run_key).one_or_none()
+        if run:
+            s.query(VerifiedQuery).filter_by(run_id=run.id).delete()
+            s.commit()
 
 
 # ------------------------------------------------------------------ edit
@@ -312,7 +380,8 @@ def delete_run(run_key):
             Table, Column.table_id == Table.id).filter(Table.run_id == rid)
         s.execute(sa_delete(Column).where(Column.id.in_(col_ids.subquery())))
         s.execute(sa_delete(Table).where(Table.run_id == rid))
-        for model in (Description, Concept, Revision, T2SQLHistory):
+        for model in (Description, Concept, ConceptRelation, Revision,
+                      T2SQLHistory, VerifiedQuery):
             s.execute(sa_delete(model).where(model.run_id == rid))
         s.execute(sa_delete(Run).where(Run.id == rid))
         s.commit()

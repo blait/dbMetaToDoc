@@ -176,7 +176,7 @@ th{background:#fafbfc;color:var(--muted);font-size:10.5px;font-weight:700;
    value="가장 흔한 진단명 상위 10개와 진단 건수">
  <button id="ask">질의 실행</button>
 </div>
-<div class="examples">
+<div class="examples" id="exlist">
  <span class="lbl">예시</span>
  <span class="ex">가장 흔한 진단명 상위 10개와 진단 건수</span>
  <span class="ex">가장 많이 처방된 약물 이름 상위 10개</span>
@@ -203,9 +203,30 @@ const esc = s => (s??'').toString().replace(/[&<>"]/g,
   c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const out = document.getElementById('out');
 
-document.querySelectorAll('.examples .ex').forEach(e=>e.onclick=()=>{
-  document.getElementById('q').value = e.textContent; ask();
-});
+function bindExamples(){
+  document.querySelectorAll('.examples .ex').forEach(e=>e.onclick=()=>{
+    document.getElementById('q').value = e.dataset.q || e.textContent; ask();
+  });
+}
+bindExamples();
+
+// replace hardcoded examples with EXECUTION-VERIFIED questions for this run
+(async ()=>{
+  try{
+    const r = await fetch(`/api/runs/${RID}/text2sql/verified`);
+    if (!r.ok) return;
+    const v = (await r.json()).verified || [];
+    if (!v.length) return;   // keep hardcoded fallback
+    const box = document.getElementById('exlist');
+    box.innerHTML = '<span class="lbl">예시 <b style="color:#059669">✓ 검증됨</b></span>'
+      + v.map(x=>`<span class="ex" data-q="${esc(x.question)}"`
+        + ` title="이 DB에서 실행 검증된 질문 (rows=${x.rowcount??'—'})">`
+        + `✓ ${esc(x.question)}</span>`).join('');
+    const first = v[0];
+    if (first) document.getElementById('q').value = first.question;
+    bindExamples();
+  }catch(e){/* fallback stays */}
+})();
 
 const STEP_META = {
   retrieve: {n:1, title:'후보 스키마 검색', tool:'OpenSearch 벡터 + Neptune 개념', cls:'aws',

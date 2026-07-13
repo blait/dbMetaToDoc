@@ -159,3 +159,38 @@ class Concept(Base):
     confidence: Mapped[float] = mapped_column(Float, nullable=True)
     mapped_tables: Mapped[list] = mapped_column(JSON, nullable=True)
     key_columns: Mapped[list] = mapped_column(JSON, nullable=True)
+
+
+class ConceptRelation(Base):
+    """Semantic relation between two concepts, grounded in a recovered FK.
+
+    e.g. (Prescription)-[PRESCRIBED_BY]->(Provider)
+         via drug_exposure.provider_id -> provider.provider_id.
+    Cardinality is DATA-derived (child column uniqueness), not LLM-guessed."""
+    __tablename__ = "concept_relations"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("runs.id"), index=True)
+    name: Mapped[str] = mapped_column(String(128))          # UPPER_SNAKE verb
+    src_concept: Mapped[str] = mapped_column(String(255))
+    dst_concept: Mapped[str] = mapped_column(String(255))
+    cardinality: Mapped[str] = mapped_column(String(8), nullable=True)  # 1:1|N:1
+    via: Mapped[str] = mapped_column(String(512), nullable=True)  # child.col -> parent.col
+    description: Mapped[str] = mapped_column(Text, nullable=True)
+    confidence: Mapped[float] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime,
+                                                 server_default=func.now())
+
+
+class VerifiedQuery(Base):
+    """Competency question verified by actually running text2sql on this run.
+
+    Doubles as few-shot examples for later text2sql generations (rid-scoped)."""
+    __tablename__ = "verified_queries"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("runs.id"), index=True)
+    question: Mapped[str] = mapped_column(Text)
+    sql: Mapped[str] = mapped_column(Text, nullable=True)
+    rowcount: Mapped[int] = mapped_column(Integer, nullable=True)
+    ok: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime,
+                                                 server_default=func.now())

@@ -30,6 +30,8 @@ def main():
     ap.add_argument("--no-concepts", action="store_true")
     ap.add_argument("--no-graph", action="store_true")
     ap.add_argument("--no-index", action="store_true")
+    ap.add_argument("--no-verify", action="store_true",
+                    help="skip stage 8 (verified competency questions)")
     args = ap.parse_args()
 
     rk = args.run_key or pipeline._run_key()
@@ -38,7 +40,7 @@ def main():
     pipeline.run_pipeline(
         rk, name=args.name or rk, with_truth=args.with_truth,
         do_concepts=not args.no_concepts, do_graph=not args.no_graph,
-        do_index=not args.no_index)
+        do_index=not args.no_index, do_verify=not args.no_verify)
     print("\n>> pipeline complete (results in the metastore).")
 
 

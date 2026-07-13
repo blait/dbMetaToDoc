@@ -26,7 +26,8 @@ from store import db as sdb, repo as srepo
 
 
 def run_pipeline(run_key, name=None, with_truth=False, do_concepts=True,
-                 do_graph=True, do_index=True, meta_extra=None):
+                 do_graph=True, do_index=True, do_verify=True,
+                 meta_extra=None):
     """Full in-memory analysis → metastore (+ Neptune + OpenSearch).
 
     Returns the catalog dict. The DB is required — results live in MySQL,
@@ -59,6 +60,17 @@ def run_pipeline(run_key, name=None, with_truth=False, do_concepts=True,
             print(f"   {len(concepts['concepts'])} concepts")
         except Exception as e:
             print(f"   concepts skipped: {e}")
+        # semantic relations between concepts (grounded in recovered FKs;
+        # cardinality is data-derived) — isolated from concept extraction
+        if concepts:
+            try:
+                rel = con.extract_concept_relations(
+                    catalog, concepts["concepts"])
+                concepts["relations"] = rel["relations"]
+                print(f"   {len(rel['relations'])} concept relations "
+                      f"({len(rel['dropped'])} dropped)")
+            except Exception as e:
+                print(f"   concept relations skipped: {e}")
 
     # eval-only: score descriptions against OMOP ground truth (in-memory)
     score = None
@@ -94,7 +106,9 @@ def run_pipeline(run_key, name=None, with_truth=False, do_concepts=True,
                 run_key, catalog, srepo.run_graph_id(run_key))
             srepo.set_status(run_key, "done", graph_id=gid)
             if concepts:
-                con.load_concepts_to_graph(run_key, gid, concepts["concepts"])
+                con.load_concepts_to_graph(
+                    run_key, gid, concepts["concepts"],
+                    concepts.get("relations"))
                 print(f"   loaded {len(concepts['concepts'])} concepts to graph")
         except Exception as e:
             print(f"   graph skipped: {e}")
@@ -106,6 +120,15 @@ def run_pipeline(run_key, name=None, with_truth=False, do_concepts=True,
             metasearch.index_catalog(run_key, catalog)
         except Exception as e:
             print(f"   index skipped: {e}")
+
+    # verified queries LAST — text2sql needs the graph + search index above
+    if do_verify:
+        print("== 8. verified queries (competency questions) ==")
+        try:
+            import verified
+            verified.build_verified(run_key, catalog, concepts)
+        except Exception as e:
+            print(f"   verified queries skipped: {e}")
 
     return catalog
 

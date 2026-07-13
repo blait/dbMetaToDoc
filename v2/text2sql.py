@@ -230,8 +230,24 @@ GEN_SYSTEM = (
     "Prefer the provided join paths for multi-table queries. Output a single "
     "read-only SELECT (no DDL/DML). If the question implies a limit, respect "
     "it; otherwise the system appends a LIMIT. Put a short Korean reasoning "
-    "in `reasoning`."
+    "in `reasoning`. If `verified_examples` is present, they are question→SQL "
+    "pairs already EXECUTED successfully on this very database — follow their "
+    "table/join conventions."
 )
+
+
+def _fewshot(rid, k=3):
+    """Top-k verified queries for THIS run (rid-scoped; no cross-run leak).
+    Returns [] when the metastore is unset or the run has none."""
+    try:
+        from store import db as sdb, repo as srepo
+        if not sdb.enabled():
+            return []
+        vq = srepo.get_verified_queries(rid, ok_only=True)
+        return [{"question": v["question"], "sql": v["sql"]}
+                for v in vq[:k]]
+    except Exception:
+        return []
 
 
 def _schema_context(retrieved, expanded):
@@ -270,9 +286,11 @@ def run_schema(rid):
 
 
 def generate(question, retrieved, expanded, rid, prior_error=None,
-             prior_sql=None):
+             prior_sql=None, examples=None):
     ctx = _schema_context(retrieved, expanded)
     payload = {"question": question, "schema_context": ctx}
+    if examples:
+        payload["verified_examples"] = examples
     if prior_error:
         payload["previous_sql"] = prior_sql
         payload["previous_error"] = prior_error
@@ -345,6 +363,7 @@ def build_graph():
         result: Any
         attempts: int
         steps: list
+        fewshot: Any          # verified-query examples, fetched once
 
     def n_retrieve(s):
         r = retrieve(s["question"], s["rid"])
@@ -395,12 +414,19 @@ def build_graph():
 
     def n_generate(s):
         prior = s.get("result") or {}
+        # fetch few-shot once per question; repair re-entries reuse the same
+        # set so the examples don't shift between attempts
+        fewshot = s.get("fewshot")
+        if fewshot is None:
+            fewshot = _fewshot(s["rid"])
         gen = generate(s["question"], s["retrieved"], s["expanded"], s["rid"],
                        prior_error=prior.get("error"),
-                       prior_sql=prior.get("executed_sql"))
-        return {"gen": gen,
+                       prior_sql=prior.get("executed_sql"),
+                       examples=fewshot or None)
+        return {"gen": gen, "fewshot": fewshot,
                 "steps": s["steps"] + [{"step": "generate", "data": gen,
-                    "repair": s.get("attempts", 0) > 0}]}
+                    "repair": s.get("attempts", 0) > 0,
+                    "fewshot_used": len(fewshot or [])}]}
 
     def n_execute(s):
         res = execute(s["gen"]["sql"])

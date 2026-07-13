@@ -385,6 +385,11 @@ def get_concepts(rid: str):
                 colmaps = neptune_query(gid, """
                     MATCH (c:Concept {run: $rid})-[:MAPPED_TO]->(col:Column {run: $rid})
                     RETURN c.name AS concept, col.id AS col""", {"rid": rid})
+                rels = neptune_query(gid, """
+                    MATCH (a:Concept {run: $rid})-[r:REL]->(b:Concept {run: $rid})
+                    RETURN a.name AS src, b.name AS dst, r.name AS name,
+                           r.cardinality AS cardinality, r.via AS via,
+                           r.confidence AS confidence""", {"rid": rid})
                 cols_by = {}
                 for x in colmaps["results"]:
                     cols_by.setdefault(x["concept"], []).append(x["col"])
@@ -396,12 +401,14 @@ def get_concepts(rid: str):
                         "mappings": [{"concept": m["concept"],
                                       "table": m["tbl"],
                                       "confidence": m["confidence"]}
-                                     for m in maps["results"]]}
+                                     for m in maps["results"]],
+                        "relations": rels["results"]}
         except Exception:
             pass
     data = srepo.load_concepts(rid)
     if not data or not data["concepts"]:
-        return {"source": "none", "concepts": [], "is_a": [], "mappings": []}
+        return {"source": "none", "concepts": [], "is_a": [],
+                "mappings": [], "relations": []}
     return {"source": "metastore", **data}
 
 
@@ -456,6 +463,16 @@ def run_t2sql(rid: str, q: QuestionIn):
         "steps": out.get("steps"),       # full detail for "이력에서 다시 보기"
     })
     return out
+
+
+@app.get("/api/runs/{rid}/text2sql/verified")
+def t2sql_verified(rid: str):
+    """Competency questions verified by execution on this run's DB.
+    The UI uses these as example questions (✓ 검증됨)."""
+    _require_store()
+    if not srepo.get_run(rid):
+        raise HTTPException(404)
+    return {"verified": srepo.get_verified_queries(rid, ok_only=True)}
 
 
 @app.get("/api/runs/{rid}/text2sql/history")
