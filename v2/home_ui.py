@@ -82,6 +82,7 @@ button:disabled{opacity:.5;cursor:default}
 .chip.running::before{background:#f59e0b;animation:pulse 1.1s ease-in-out infinite}
 .chip.done{background:#dcfce7;color:#166534}.chip.done::before{background:#22c55e}
 .chip.failed{background:#fee2e2;color:#991b1b}.chip.failed::before{background:#ef4444}
+.chip.eval{background:#ede9fe;color:#5b21b6}.chip.eval::before{background:#8b5cf6}
 @keyframes pulse{50%{opacity:.35}}
 .metrics{display:flex;gap:0;border:1px solid var(--line);border-radius:10px;
  overflow:hidden;background:#fafbfc}
@@ -254,6 +255,7 @@ async function loadRuns(){
     const h = m.headline||{};
     return `<div class="card run-card" data-id="${esc(m.id)}">
      <div class="run-top"><b>${esc(m.name)}</b>
+      ${m.with_truth?'<span class="chip eval">평가 런 · 정답지 채점</span>':''}
       <span class="chip ${esc(m.status)}">${
         m.status==='running'?'실행 중':m.status==='done'?'완료':'실패'}</span></div>
      <div class="run-target">${esc(m.dbname)}@${esc(m.host)} · schema <code>${esc(m.schema)}</code></div>

@@ -132,6 +132,9 @@ th{background:#fafbfc;color:var(--muted);font-size:11px;font-weight:700;
 .footnote{border-top:1px solid var(--line);margin-top:28px;padding-top:14px;
  color:var(--muted);font-size:12px}
 .small{font-size:12px}
+.evalbadge{display:inline-block;vertical-align:middle;margin-left:8px;
+ background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px;
+ font-size:11px;font-weight:700;letter-spacing:0}
 </style></head><body>
 <header>
  <span class="brand"><span class="logo">◈</span>db2doc</span>
@@ -165,6 +168,9 @@ const judgeModel = SM.judge_accuracy?.model || GEN_MODEL;
 const embedModel = SM.mean_cosine?.model || 'embedding';
 document.getElementById('hdrline').textContent =
  `${CATALOG.database.domain||''} — ${CATALOG.database.db_description||''}`;
+if (SCORE) document.getElementById('hdrtitle').insertAdjacentHTML('beforeend',
+ ' <span class="evalbadge" title="정답지(공식 데이터 사전)와 대조 채점된 벤치마크 런입니다.' +
+ ' 고객 DB 런에는 채점이 없습니다.">평가 런 · 정답지 채점</span>');
 
 function srcBadge(kind){
   if(kind==='judge') return `<span class="src llm" title="${esc(SM.judge_accuracy?.method||'')}">LLM judge · ${esc(judgeModel)}</span>`;
