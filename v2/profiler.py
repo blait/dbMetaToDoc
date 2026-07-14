@@ -70,6 +70,15 @@ def fetch_comments(cur, table):
     return tbl_comment, col_comments
 
 
+# types with native min()/max() aggregates AND equality for DISTINCT;
+# everything else (boolean, json, xml, geometric, ...) is cast to text
+_AGG_OK = {"smallint", "integer", "bigint", "numeric", "real",
+           "double precision", "money", "character varying", "character",
+           "text", "date", "interval", "uuid", "inet", "name", "oid",
+           "timestamp without time zone", "timestamp with time zone",
+           "time without time zone", "time with time zone"}
+
+
 def bulk_stats(cur, table, cols, rowcount):
     """All per-column aggregates in a single query over a bounded sample."""
     if rowcount == 0:
@@ -79,10 +88,11 @@ def bulk_stats(cur, table, cols, rowcount):
     parts = ["count(*) AS _n"]
     for i, c in enumerate(cols):
         q = qident(c["name"])
+        agg = q if c["data_type"] in _AGG_OK else f"({q}::text)"
         parts.append(f"count({q}) AS nn_{i}")
-        parts.append(f"count(DISTINCT {q}) AS d_{i}")
-        parts.append(f"min({q})::text AS mn_{i}")
-        parts.append(f"max({q})::text AS mx_{i}")
+        parts.append(f"count(DISTINCT {agg}) AS d_{i}")
+        parts.append(f"min({agg})::text AS mn_{i}")
+        parts.append(f"max({agg})::text AS mx_{i}")
     src = f"(SELECT * FROM {qident(PGSCHEMA)}.{qident(table)} LIMIT {SAMPLE_ROWS}) s"
     cur.execute(f"SELECT {', '.join(parts)} FROM {src}")
     row = cur.fetchone()
