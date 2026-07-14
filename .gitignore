@@ -25,3 +25,6 @@ ui/db2doc_ui.html
 
 # Fernet master key
 secrets/
+
+# local test DB credentials
+TEST_DBS.md
