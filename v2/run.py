@@ -27,6 +27,9 @@ def main():
     ap.add_argument("--name", default=None)
     ap.add_argument("--with-truth", action="store_true",
                     help="OMOP eval run — stay blind (ignore DB comments)")
+    ap.add_argument("--use-comments", action="store_true",
+                    help="override: keep DB comments as hints even with "
+                         "--with-truth (customer-mode eval)")
     ap.add_argument("--no-concepts", action="store_true")
     ap.add_argument("--no-graph", action="store_true")
     ap.add_argument("--no-index", action="store_true")
@@ -36,7 +39,7 @@ def main():
 
     rk = args.run_key or pipeline._run_key()
     if args.with_truth:
-        os.environ["V2_USE_COMMENTS"] = "0"
+        os.environ["V2_USE_COMMENTS"] = "1" if args.use_comments else "0"
     pipeline.run_pipeline(
         rk, name=args.name or rk, with_truth=args.with_truth,
         do_concepts=not args.no_concepts, do_graph=not args.no_graph,

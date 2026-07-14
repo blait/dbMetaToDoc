@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 
 from .db import Session
 from .models import (Run, Table, Column, Description, Revision, Concept,
-                     ConceptRelation, T2SQLHistory, VerifiedQuery)
+                     ConceptRelation, T2SQLHistory, VerifiedQuery,
+                     RunArtifact)
 
 
 # ------------------------------------------------------------------ write
@@ -301,6 +302,32 @@ def replace_concept_relations(run_key, relations):
         return len(relations)
 
 
+# ------------------------------------------------------------- artifacts
+def save_artifact(run_key, name, payload):
+    """Upsert a named JSON artifact (score report / details) for a run."""
+    with Session() as s:
+        run = s.query(Run).filter_by(run_key=run_key).one_or_none()
+        if not run:
+            raise KeyError(run_key)
+        row = (s.query(RunArtifact)
+               .filter_by(run_id=run.id, name=name).one_or_none())
+        if row:
+            row.payload = payload
+        else:
+            s.add(RunArtifact(run_id=run.id, name=name, payload=payload))
+        s.commit()
+
+
+def get_artifact(run_key, name):
+    with Session() as s:
+        run = s.query(Run).filter_by(run_key=run_key).one_or_none()
+        if not run:
+            return None
+        row = (s.query(RunArtifact)
+               .filter_by(run_id=run.id, name=name).one_or_none())
+        return row.payload if row else None
+
+
 # ------------------------------------------------------------ verified qs
 def add_verified_query(run_key, entry):
     with Session() as s:
@@ -381,7 +408,7 @@ def delete_run(run_key):
         s.execute(sa_delete(Column).where(Column.id.in_(col_ids.subquery())))
         s.execute(sa_delete(Table).where(Table.run_id == rid))
         for model in (Description, Concept, ConceptRelation, Revision,
-                      T2SQLHistory, VerifiedQuery):
+                      T2SQLHistory, VerifiedQuery, RunArtifact):
             s.execute(sa_delete(model).where(model.run_id == rid))
         s.execute(sa_delete(Run).where(Run.id == rid))
         s.commit()

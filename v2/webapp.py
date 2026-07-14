@@ -161,7 +161,7 @@ def get_run(rid: str):
 @app.get("/api/runs/{rid}/artifact/{name}")
 def get_artifact(rid: str, name: str):
     """The viewer fetches 'catalog.json'; we serve it from the metastore.
-    Score artifacts are not part of the DB-only customer flow."""
+    Score artifacts exist only for eval runs (with_truth) — null otherwise."""
     _require_store()
     if name == "catalog.json":
         cat = srepo.load_run(rid)
@@ -169,7 +169,7 @@ def get_artifact(rid: str, name: str):
             raise HTTPException(404)
         return cat
     if name in ("score.json", "score_details.json"):
-        return JSONResponse(None)     # no ground-truth scoring in DB-only flow
+        return JSONResponse(srepo.get_artifact(rid, name))
     raise HTTPException(404)
 
 

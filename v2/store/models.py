@@ -181,6 +181,21 @@ class ConceptRelation(Base):
                                                  server_default=func.now())
 
 
+class RunArtifact(Base):
+    """Named JSON artifact for a run (e.g. score report / per-item details).
+
+    Replaces the old runs/<id>/*.json files in the DB-only flow so the
+    viewer can still show per-table/column ground-truth scoring."""
+    __tablename__ = "run_artifacts"
+    __table_args__ = (UniqueConstraint("run_id", "name", name="uq_artifact"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("runs.id"), index=True)
+    name: Mapped[str] = mapped_column(String(64))
+    payload: Mapped[dict] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime,
+                                                 server_default=func.now())
+
+
 class VerifiedQuery(Base):
     """Competency question verified by actually running text2sql on this run.
 

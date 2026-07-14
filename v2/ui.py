@@ -336,7 +336,7 @@ function compareBlock(key, genText, tbl, col, edited, original){
      &nbsp; cosine: ${d.cosine?.toFixed(3)??'—'}
      <span class="pill" title="${esc(SM.mean_cosine?.method||'')}">임베딩 · ${esc(embedModel)}</span>
    </div>
-   ${d.judge===0&&d.judge_reason?`<p class="small" style="color:var(--bad)">
+   ${d.judge_reason?`<p class="small" style="color:${d.judge===0?'var(--bad)':'var(--muted)'}">
      judge 사유: ${esc(d.judge_reason)}</p>`:''}`;
 }
 

@@ -64,23 +64,26 @@ def run_pipeline(run_key, name=None, with_truth=False, do_concepts=True,
         # cardinality is data-derived) — isolated from concept extraction
         if concepts:
             try:
-                rel = con.extract_concept_relations(
+                crel = con.extract_concept_relations(
                     catalog, concepts["concepts"])
-                concepts["relations"] = rel["relations"]
-                print(f"   {len(rel['relations'])} concept relations "
-                      f"({len(rel['dropped'])} dropped)")
+                concepts["relations"] = crel["relations"]
+                print(f"   {len(crel['relations'])} concept relations "
+                      f"({len(crel['dropped'])} dropped)")
             except Exception as e:
                 print(f"   concept relations skipped: {e}")
 
     # eval-only: score descriptions against OMOP ground truth (in-memory)
     score = None
+    score_artifacts = None
     if with_truth:
         print("== 5b. score (OMOP ground truth) ==")
         try:
             import score as S
-            report, _ = S.score_run(descriptions, relations)
+            report, details = S.score_run(descriptions, relations)
             score = S.headline_from_report(report)
+            score_artifacts = (report, details)
             print(f"   col_judge={score.get('col_judge')} "
+                  f"tbl_judge={score.get('tbl_judge')} "
                   f"fk_f1={score.get('fk_f1')} S={score.get('s_overall')}")
         except Exception as e:
             print(f"   scoring skipped: {e}")
@@ -91,6 +94,10 @@ def run_pipeline(run_key, name=None, with_truth=False, do_concepts=True,
     if meta_extra:
         meta.update(meta_extra)
     srepo.upsert_run(run_key, catalog, concepts, meta)
+    if score_artifacts:
+        # per-item scoring for the viewer (generated vs ground truth)
+        srepo.save_artifact(run_key, "score.json", score_artifacts[0])
+        srepo.save_artifact(run_key, "score_details.json", score_artifacts[1])
     ncols = sum(len(t["columns"]) for t in catalog["tables"])
     print(f">> loaded run '{run_key}' to metastore "
           f"({len(catalog['tables'])} tables / {ncols} columns)")
