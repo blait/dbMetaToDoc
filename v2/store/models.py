@@ -47,6 +47,8 @@ class Run(Base):
     dbname: Mapped[str] = mapped_column(String(255), nullable=True)
     schema_name: Mapped[str] = mapped_column(String(255), nullable=True)
     domain: Mapped[str] = mapped_column(String(255), nullable=True)
+    username: Mapped[str] = mapped_column(String(255), nullable=True)
+    secret_ref: Mapped[str] = mapped_column(Text, nullable=True)  # Fernet pw
     error: Mapped[str] = mapped_column(Text, nullable=True)
     db_description: Mapped[str] = mapped_column(Text, nullable=True)
     ai_db_description: Mapped[str] = mapped_column(Text, nullable=True)

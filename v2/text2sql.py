@@ -46,6 +46,25 @@ def _gid(rid):
     return cfg("NEPTUNE_GRAPH_ID")   # legacy fallback
 
 
+def _connect(rid=None):
+    """Connect to THIS run's target DB (credentials stored encrypted at run
+    creation). Falls back to the PG* env for runs without stored creds."""
+    if rid:
+        try:
+            from store import db as sdb, repo as srepo
+            if sdb.enabled():
+                ci = srepo.run_conn_info(rid)
+                if ci:
+                    import psycopg2
+                    return psycopg2.connect(
+                        host=ci["host"], port=ci["port"],
+                        dbname=ci["dbname"], user=ci["user"],
+                        password=ci["password"], connect_timeout=15)
+        except Exception:
+            pass
+    return connect()
+
+
 # ------------------------------------------------------------- concept layer
 def match_concepts(question, rid):
     """Ontology path: match question terms to Concept nodes (by name/Korean
@@ -320,9 +339,9 @@ def _guard_and_limit(sql):
     return s
 
 
-def execute(sql):
+def execute(sql, rid=None):
     safe = _guard_and_limit(sql)
-    conn = connect()
+    conn = _connect(rid)
     conn.autocommit = True
     try:
         with conn.cursor() as cur:
@@ -429,7 +448,7 @@ def build_graph():
                     "fewshot_used": len(fewshot or [])}]}
 
     def n_execute(s):
-        res = execute(s["gen"]["sql"])
+        res = execute(s["gen"]["sql"], rid=s.get("rid"))
         return {"result": res, "attempts": s.get("attempts", 0) + 1,
                 "steps": s["steps"] + [{"step": "execute", "data": res}]}
 

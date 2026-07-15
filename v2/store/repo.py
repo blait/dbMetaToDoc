@@ -145,6 +145,11 @@ def create_run(run_key, meta):
         run.schema_name = meta.get("schema")
         run.with_truth = bool(meta.get("with_truth"))
         run.status = meta.get("status", "running")
+        if meta.get("username"):
+            run.username = meta["username"]
+        if meta.get("password"):
+            from . import crypto
+            run.secret_ref = crypto.encrypt(meta["password"])
         s.commit()
         return run.run_key
 
@@ -300,6 +305,25 @@ def replace_concept_relations(run_key, relations):
                 confidence=r.get("confidence")))
         s.commit()
         return len(relations)
+
+
+def run_conn_info(run_key):
+    """Decrypted target-DB connection info for a run (text2sql execute).
+
+    Returns None when the run has no stored credentials (pre-existing runs)
+    — callers fall back to the process PG* env."""
+    with Session() as s:
+        run = s.query(Run).filter_by(run_key=run_key).one_or_none()
+        if not run or not run.host or not run.secret_ref:
+            return None
+        from . import crypto
+        try:
+            password = crypto.decrypt(run.secret_ref)
+        except Exception:
+            return None    # key rotated/missing — env fallback
+        return {"host": run.host, "port": run.port or 5432,
+                "dbname": run.dbname, "user": run.username,
+                "password": password, "schema": run.schema_name}
 
 
 # ------------------------------------------------------------- artifacts

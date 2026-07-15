@@ -138,6 +138,9 @@ def create_run(conn: ConnectionIn):
         "host": conn.host, "port": conn.port, "dbname": conn.dbname,
         "schema": conn.schema_name, "with_truth": conn.with_truth,
         "status": "running",
+        # stored encrypted (Fernet) so text2sql can execute against THIS
+        # run's DB later, not whatever the process env points at
+        "username": conn.user, "password": conn.password,
     })
     launch_pipeline(rid, conn)
     return {"id": rid}
